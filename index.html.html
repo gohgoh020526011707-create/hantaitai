@@ -505,7 +505,7 @@
                     const holidayName = holidays.get(dateString);
                     const isAdminHoliday = adminHolidays.includes(dateString);
 
-                    day.className = `calendar-day p-1 sm:p-2 rounded-lg text-left`;
+                    day.className = `calendar-day p-1 sm:p-2 rounded-lg text-left text-xs`;
                     day.dataset.date = dateString;
 
                     if (isThursday || isAdminHoliday) {
@@ -556,7 +556,7 @@
                                 if (group.morning) userListHtml.push(`<div class="${colorClass}">${roleLabel} 早上：${group.morning}</div>`);
                                 if (group.evening) userListHtml.push(`<div class="${colorClass}">${roleLabel} 晚上：${group.evening}</div>`);
                             });
-                            usersHtml = `<div class="mt-1 text-xs text-gray-600 leading-tight overflow-hidden">${userListHtml.join('')}</div>`;
+                            usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml.join('')}</div>`;
                         }
                         
                         let selfStatusHtml = '';
@@ -567,11 +567,11 @@
                             const isVacation = (userVacations[vacationKey] || []).includes(dateString);
                             if (isVacation) {
                                 day.classList.add('bg-red-100', 'border', 'border-red-400');
-                                selfStatusHtml = `<p class="text-xs font-semibold text-red-700">休假</p>`;
+                                selfStatusHtml = `<p class="font-semibold text-red-700">休假</p>`;
                             } else {
                                 if(!holidayName) day.classList.add('bg-green-100');
                                 day.classList.add('border', 'border-green-400');
-                                selfStatusHtml = `<p class="text-xs font-semibold text-green-700">上班日</p>`;
+                                selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
                         } else if (currentUserData.role === PART_TIMER_ROLE) {
                             const availabilityKey = `${currentUser.uid}-${year}-${month+1}`;
@@ -581,17 +581,17 @@
                             if (isAvailable) {
                                 if(!holidayName) day.classList.add('bg-blue-100');
                                 day.classList.add('border', 'border-blue-400');
-                                selfStatusHtml = `<p class="text-xs font-semibold text-blue-700">要上班</p>`;
+                                selfStatusHtml = `<p class="font-semibold text-blue-700">要上班</p>`;
                             } else {
                                 if(!holidayName) day.classList.add('bg-white');
-                                selfStatusHtml = `<p class="text-xs text-gray-400">休息</p>`;
+                                selfStatusHtml = `<p class="text-gray-400">休息</p>`;
                             }
                             if (isWorkingCoverShift) {
-                                selfStatusHtml += `<p class="text-xs font-bold text-green-700">(已代班)</p>`;
+                                selfStatusHtml += `<p class="font-bold text-green-700">(已代班)</p>`;
                             }
                         }
 
-                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800">${i}</span>${holidayName ? `<p class="text-xs font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-sm sm:text-base">${i}</span>${holidayName ? `<p class="text-[11px] sm:text-xs font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
