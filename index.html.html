@@ -522,6 +522,23 @@
                         const workingUsers = dailySchedule[dateString] || [];
                         let usersHtml = '<div class="flex-grow"></div>';
                         if (workingUsers.length > 0) {
+                            const getSortOrder = (workInfo) => {
+                                const { role, isCover, timeSlot } = workInfo;
+                                if (role === '内場備菜班') {
+                                    if (isCover) return timeSlot === 'AM' ? 1 : 2; // 早備, 晚備
+                                    return 3; // 備
+                                }
+                                if (role === '内場炸爐班') {
+                                    if (isCover) return timeSlot === 'AM' ? 4 : 5; // 早炸, 晚炸
+                                    return 6; // 炸
+                                }
+                                if (role === PART_TIMER_ROLE) {
+                                    return 7; // 收
+                                }
+                                return 99;
+                            };
+                            workingUsers.sort((a, b) => getSortOrder(a) - getSortOrder(b));
+
                             const userListHtml = workingUsers.map(workInfo => {
                                 const { username, role, isCover, timeSlot } = workInfo;
                                 let displayLabel = '';
@@ -532,8 +549,13 @@
                                 if (originalUser && originalUser.role === PART_TIMER_ROLE) {
                                     colorClass = 'font-semibold text-blue-800';
                                     if (isCover) { 
-                                        if (role === '内場備菜班') displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
-                                        else if (role === '内場炸爐班') displayLabel = `(${timeSlot === 'AM' ? '早炸' : '晚炸'})`;
+                                        if (role === '内場備菜班') {
+                                            displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
+                                            colorClass = 'font-semibold text-green-800';
+                                        } else if (role === '内場炸爐班') {
+                                            displayLabel = `(${timeSlot === 'AM' ? '早炸' : '晚炸'})`;
+                                            colorClass = 'font-semibold text-amber-800';
+                                        }
                                     } else { 
                                         displayLabel = '(收)';
                                     }
