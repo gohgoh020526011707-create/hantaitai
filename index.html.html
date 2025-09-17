@@ -291,7 +291,8 @@
                             userVacations: {},
                             userAvailability: {},
                             coverSignups: {},
-                            adminHolidays: []
+                            adminHolidays: [],
+                            manualAssignments: {}
                         });
                     }
                     if (currentUserData) renderAppView(); // Re-render when data changes
@@ -428,6 +429,34 @@
                  const instructions = calendarView.querySelector('p');
                 if (currentUserData.role === ADMIN_ROLE) {
                     instructions.textContent = "點擊日期以設定或取消該日為全體公休日。";
+                    calendarView.insertAdjacentHTML('beforeend', `
+                        <div id="admin-assignment-panel" class="mt-8 p-4 sm:p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4 text-indigo-800">手動新增排班</h3>
+                            <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                <input type="date" id="assignment-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                <select id="assignment-user" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></select>
+                                <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></select>
+                                <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
+                            </form>
+                        </div>
+                    `);
+                    
+                    const userSelect = document.getElementById('assignment-user');
+                    userSelect.innerHTML = '<option value="" disabled selected>選擇人員</option>';
+                    allUsers.forEach(user => {
+                        if (user.role !== ADMIN_ROLE) {
+                            userSelect.innerHTML += `<option value="${user.username}">${user.username}</option>`;
+                        }
+                    });
+
+                    const roleSelect = document.getElementById('assignment-role');
+                    roleSelect.innerHTML = `
+                        <option value="" disabled selected>選擇班別</option>
+                        <option value="内場備菜班">備菜班</option>
+                        <option value="内場炸爐班">炸爐班</option>
+                        <option value="内場工讀生">收班</option>
+                    `;
+
                 } else {
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
                 }
@@ -442,7 +471,7 @@
                 document.getElementById('calendar-month-year').textContent = `${year}年 ${month + 1}月`;
                 
                 const holidays = await fetchHolidays(year);
-                const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {} } = allData;
+                const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
 
                 const dailySchedule = {};
                 const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
@@ -491,6 +520,24 @@
                             dailySchedule[dateString].push({ username: user.username, role: user.role, isCover: false, timeSlot: 'FullDay' });
                         }
                     });
+                });
+
+                Object.keys(manualAssignments).forEach(dateString => {
+                    if (dailySchedule[dateString]) {
+                        const assignments = manualAssignments[dateString];
+                        assignments.forEach(assignment => {
+                            dailySchedule[dateString] = dailySchedule[dateString].filter(
+                                s => s.username !== assignment.username
+                            );
+                            dailySchedule[dateString].push({ 
+                                username: assignment.username, 
+                                role: assignment.role, 
+                                isCover: false,
+                                timeSlot: 'FullDay',
+                                isManual: true
+                            });
+                        });
+                    }
                 });
 
                 const calendarGrid = document.getElementById('calendar-grid');
@@ -690,6 +737,30 @@
                 }
             }
 
+            async function handleManualAssignment(e) {
+                e.preventDefault();
+                const form = document.getElementById('manual-assignment-form');
+                const date = form.querySelector('#assignment-date').value;
+                const username = form.querySelector('#assignment-user').value;
+                const role = form.querySelector('#assignment-role').value;
+
+                if (!date || !username || !role) return showToast('所有欄位皆為必填。');
+
+                const { manualAssignments = {} } = allData;
+                const dayAssignments = manualAssignments[date] || [];
+                
+                const newAssignment = { username, role };
+
+                const newDayAssignments = dayAssignments.filter(a => a.username !== username); // Remove old assignments for this user on this day
+                newDayAssignments.push(newAssignment); // Add the new one
+
+                const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
+
+                await setDoc(doc(db, "scheduleData", "main"), { manualAssignments: newManualAssignments }, { merge: true });
+                showToast('手動排班已新增！');
+                form.reset();
+            }
+
             // --- Auth Logic ---
             async function handleRegister(e) {
                 e.preventDefault();
@@ -805,6 +876,11 @@
                     }
                     if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
                         await handleCoverShiftAction(e);
+                    }
+                });
+                calendarView.addEventListener('submit', async (e) => {
+                    if (e.target.id === 'manual-assignment-form') {
+                       await handleManualAssignment(e);
                     }
                 });
             }
