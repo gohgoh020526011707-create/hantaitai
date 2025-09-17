@@ -505,7 +505,7 @@
                     const holidayName = holidays.get(dateString);
                     const isAdminHoliday = adminHolidays.includes(dateString);
 
-                    day.className = `calendar-day p-1 sm:p-2 rounded-lg text-left text-xs`;
+                    day.className = `calendar-day p-1 rounded-lg text-left text-[10px] sm:text-xs`;
                     day.dataset.date = dateString;
 
                     if (isThursday || isAdminHoliday) {
@@ -522,41 +522,36 @@
                         const workingUsers = dailySchedule[dateString] || [];
                         let usersHtml = '<div class="flex-grow"></div>';
                         if (workingUsers.length > 0) {
-                            const displayGroups = {};
-                            workingUsers.forEach(workInfo => {
-                                let roleLabel = '';
-                                if (workInfo.role === '内場備菜班') roleLabel = '備菜班';
-                                else if (workInfo.role === '内場炸爐班') roleLabel = '炸爐班';
-                                else if (workInfo.role === PART_TIMER_ROLE && !workInfo.isCover) roleLabel = '收班';
-                                if (!roleLabel) return;
-                                
-                                if (!displayGroups[roleLabel]) displayGroups[roleLabel] = {};
-
-                                if (workInfo.isCover) {
-                                    const timeKey = workInfo.timeSlot === 'AM' ? 'morning' : 'evening';
-                                    displayGroups[roleLabel][timeKey] = workInfo.username;
-                                } else {
-                                    displayGroups[roleLabel].fullDay = workInfo.username;
-                                }
-                            });
-
-                            const userListHtml = [];
-                            const order = ['備菜班', '炸爐班', '收班'];
-
-                            order.forEach(roleLabel => {
-                                const group = displayGroups[roleLabel];
-                                if (!group) return;
-                                
+                            const userListHtml = workingUsers.map(workInfo => {
+                                const { username, role, isCover, timeSlot } = workInfo;
+                                let displayLabel = '';
                                 let colorClass = '';
-                                if (roleLabel === '備菜班') colorClass = 'font-semibold text-green-800';
-                                else if (roleLabel === '炸爐班') colorClass = 'font-semibold text-amber-800';
-                                else if (roleLabel === '收班') colorClass = 'font-semibold text-blue-800';
+                                
+                                const originalUser = allUsers.find(u => u.username === username);
 
-                                if (group.fullDay) userListHtml.push(`<div class="${colorClass}">${roleLabel}：${group.fullDay}</div>`);
-                                if (group.morning) userListHtml.push(`<div class="${colorClass}">${roleLabel} 早上：${group.morning}</div>`);
-                                if (group.evening) userListHtml.push(`<div class="${colorClass}">${roleLabel} 晚上：${group.evening}</div>`);
-                            });
-                            usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml.join('')}</div>`;
+                                if (originalUser && originalUser.role === PART_TIMER_ROLE) {
+                                    colorClass = 'font-semibold text-blue-800';
+                                    if (isCover) { 
+                                        if (role === '内場備菜班') displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
+                                        else if (role === '内場炸爐班') displayLabel = `(${timeSlot === 'AM' ? '早炸' : '晚炸'})`;
+                                    } else { 
+                                        displayLabel = '(收)';
+                                    }
+                                } else { 
+                                    switch (role) {
+                                        case '内場備菜班':
+                                            displayLabel = '(備)';
+                                            colorClass = 'font-semibold text-green-800';
+                                            break;
+                                        case '内場炸爐班':
+                                            displayLabel = '(炸)';
+                                            colorClass = 'font-semibold text-amber-800';
+                                            break;
+                                    }
+                                }
+                                return `<div class="${colorClass}">${username}${displayLabel}</div>`;
+                            }).join('');
+                            usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml}</div>`;
                         }
                         
                         let selfStatusHtml = '';
@@ -591,7 +586,7 @@
                             }
                         }
 
-                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-sm sm:text-base">${i}</span>${holidayName ? `<p class="text-[11px] sm:text-xs font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
