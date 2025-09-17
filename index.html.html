@@ -434,28 +434,21 @@
                             <h3 class="text-lg font-bold mb-4 text-indigo-800">手動新增排班</h3>
                             <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
                                 <input type="date" id="assignment-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                                <select id="assignment-user" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></select>
-                                <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></select>
+                                <input type="text" id="assignment-user" placeholder="輸入姓名" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="" disabled selected>選擇班別</option>
+                                    <option value="備菜班 (早)">備菜班 (早)</option>
+                                    <option value="備菜班 (晚)">備菜班 (晚)</option>
+                                    <option value="備菜班 (全日)">備菜班 (全日)</option>
+                                    <option value="炸爐班 (早)">炸爐班 (早)</option>
+                                    <option value="炸爐班 (晚)">炸爐班 (晚)</option>
+                                    <option value="炸爐班 (全日)">炸爐班 (全日)</option>
+                                    <option value="收班">收班</option>
+                                </select>
                                 <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
                             </form>
                         </div>
                     `);
-                    
-                    const userSelect = document.getElementById('assignment-user');
-                    userSelect.innerHTML = '<option value="" disabled selected>選擇人員</option>';
-                    allUsers.forEach(user => {
-                        if (user.role !== ADMIN_ROLE) {
-                            userSelect.innerHTML += `<option value="${user.username}">${user.username}</option>`;
-                        }
-                    });
-
-                    const roleSelect = document.getElementById('assignment-role');
-                    roleSelect.innerHTML = `
-                        <option value="" disabled selected>選擇班別</option>
-                        <option value="内場備菜班">備菜班</option>
-                        <option value="内場炸爐班">炸爐班</option>
-                        <option value="内場工讀生">收班</option>
-                    `;
 
                 } else {
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
@@ -526,14 +519,28 @@
                     if (dailySchedule[dateString]) {
                         const assignments = manualAssignments[dateString];
                         assignments.forEach(assignment => {
+                             // Remove any other assignment for this user on this day
                             dailySchedule[dateString] = dailySchedule[dateString].filter(
                                 s => s.username !== assignment.username
                             );
+
+                            // Parse assignedShift to role and timeSlot
+                            let role = '';
+                            let timeSlot = 'FullDay';
+                            const assignedShift = assignment.assignedShift;
+
+                            if (assignedShift.includes('備菜班')) role = '内場備菜班';
+                            else if (assignedShift.includes('炸爐班')) role = '内場炸爐班';
+                            else if (assignedShift === '收班') role = '内場工讀生';
+
+                            if (assignedShift.includes('早')) timeSlot = 'AM';
+                            else if (assignedShift.includes('晚')) timeSlot = 'PM';
+
                             dailySchedule[dateString].push({ 
                                 username: assignment.username, 
-                                role: assignment.role, 
-                                isCover: false,
-                                timeSlot: 'FullDay',
+                                role: role, 
+                                isCover: true, // Treat as cover to get time-specific labels
+                                timeSlot: timeSlot,
                                 isManual: true
                             });
                         });
@@ -597,9 +604,9 @@
                                 let colorClass = '';
                                 
                                 const originalUser = allUsers.find(u => u.username === username);
+                                const userRole = originalUser ? originalUser.role : (role === PART_TIMER_ROLE ? PART_TIMER_ROLE : null);
 
-                                if (originalUser && originalUser.role === PART_TIMER_ROLE) {
-                                    
+                                if (userRole === PART_TIMER_ROLE || workInfo.isManual) {
                                     if (isCover) { 
                                         if (role === '内場備菜班') {
                                             displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
@@ -741,18 +748,18 @@
                 e.preventDefault();
                 const form = document.getElementById('manual-assignment-form');
                 const date = form.querySelector('#assignment-date').value;
-                const username = form.querySelector('#assignment-user').value;
-                const role = form.querySelector('#assignment-role').value;
+                const username = form.querySelector('#assignment-user').value.trim();
+                const assignedShift = form.querySelector('#assignment-role').value;
 
-                if (!date || !username || !role) return showToast('所有欄位皆為必填。');
+                if (!date || !username || !assignedShift) return showToast('所有欄位皆為必填。');
 
                 const { manualAssignments = {} } = allData;
                 const dayAssignments = manualAssignments[date] || [];
                 
-                const newAssignment = { username, role };
+                const newAssignment = { username, assignedShift };
 
-                const newDayAssignments = dayAssignments.filter(a => a.username !== username); // Remove old assignments for this user on this day
-                newDayAssignments.push(newAssignment); // Add the new one
+                const newDayAssignments = dayAssignments.filter(a => a.username !== username); 
+                newDayAssignments.push(newAssignment);
 
                 const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
 
