@@ -119,6 +119,10 @@
                     </div>
                     <div class="flex items-center gap-4">
                         <p class="text-xs sm:text-sm text-gray-600">使用者: <span id="userName" class="font-semibold bg-gray-100 p-1 rounded"></span> (<span id="userRole" class="font-semibold"></span>)</p>
+                        <button id="settings-btn" class="hidden items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
+                            <span class="material-icons-outlined">settings</span>
+                            <span class="hidden sm:inline">個人設定</span>
+                        </button>
                         <button id="logout-btn" class="flex items-center gap-1 text-sm text-red-500 hover:text-red-700">
                             <span class="material-icons-outlined">logout</span>
                             <span class="hidden sm:inline">登出</span>
@@ -142,6 +146,25 @@
             </main>
         </div>
 
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-md p-8 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">個人設定</h2>
+                    <button id="close-settings-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <form id="change-password-form" class="space-y-6">
+                    <h3 class="text-lg font-semibold">修改密碼</h3>
+                    <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
+                    <p id="settings-error" class="text-center text-red-500 text-sm mt-4"></p>
+                </form>
+            </div>
+        </div>
+
         <!-- Notification Toast -->
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
@@ -156,7 +179,8 @@
             createUserWithEmailAndPassword, 
             signInWithEmailAndPassword, 
             signOut, 
-            onAuthStateChanged 
+            onAuthStateChanged,
+            updatePassword
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { 
             getFirestore, 
@@ -219,6 +243,11 @@
             const userRoleSpan = document.getElementById('userRole');
             const appSubtitle = document.getElementById('app-subtitle');
             const calendarView = document.getElementById('calendar-view');
+            const settingsBtn = document.getElementById('settings-btn');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeSettingsBtn = document.getElementById('close-settings-btn');
+            const changePasswordForm = document.getElementById('change-password-form');
+            const settingsError = document.getElementById('settings-error');
 
             // --- Helper Functions ---
             function showToast(message) {
@@ -599,14 +628,14 @@
                             workingUsers.sort((a, b) => getSortOrder(a) - getSortOrder(b));
 
                             const userListHtml = workingUsers.map(workInfo => {
-                                const { username, role, isCover, timeSlot } = workInfo;
+                                const { username, role, isCover, timeSlot, isManual } = workInfo;
                                 let displayLabel = '';
                                 let colorClass = '';
                                 
                                 const originalUser = allUsers.find(u => u.username === username);
                                 const userRole = originalUser ? originalUser.role : (role === PART_TIMER_ROLE ? PART_TIMER_ROLE : null);
 
-                                if (userRole === PART_TIMER_ROLE || workInfo.isManual) {
+                                if (userRole === PART_TIMER_ROLE || isManual) {
                                     if (isCover) { 
                                         if (role === '内場備菜班') {
                                             displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
@@ -631,7 +660,16 @@
                                             break;
                                     }
                                 }
-                                return `<div class="${colorClass}">${username}${displayLabel}</div>`;
+                                
+                                const deleteButtonHtml = (currentUserData.role === ADMIN_ROLE && isManual)
+                                    ? `<button data-date="${dateString}" data-username="${username}" class="delete-manual-assignment-btn text-red-400 hover:text-red-700 font-bold">&times;</button>`
+                                    : '';
+
+                                return `<div class="flex items-center justify-between w-full">
+                                            <span class="${colorClass}">${username}${displayLabel}</span>
+                                            ${deleteButtonHtml}
+                                        </div>`;
+
                             }).join('');
                             usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml}</div>`;
                         }
@@ -768,6 +806,24 @@
                 form.reset();
             }
 
+            async function handleDeleteManualAssignment(dateString, username) {
+                const { manualAssignments = {} } = allData;
+                if (!manualAssignments[dateString]) return;
+
+                const updatedDayAssignments = (manualAssignments[dateString] || []).filter(a => a.username !== username);
+
+                const newManualAssignments = { ...manualAssignments };
+
+                if (updatedDayAssignments.length > 0) {
+                    newManualAssignments[dateString] = updatedDayAssignments;
+                } else {
+                    delete newManualAssignments[dateString];
+                }
+
+                await setDoc(doc(db, "scheduleData", "main"), { manualAssignments: newManualAssignments }, { merge: true });
+                showToast('手動排班已刪除！');
+            }
+
             // --- Auth Logic ---
             async function handleRegister(e) {
                 e.preventDefault();
@@ -817,9 +873,39 @@
                 signOut(auth);
             }
             
+            async function handleChangePassword(e) {
+                e.preventDefault();
+                settingsError.textContent = '';
+                const newPassword = changePasswordForm.querySelector('#new-password').value;
+                const confirmNewPassword = changePasswordForm.querySelector('#confirm-new-password').value;
+
+                if (newPassword.length < 6) {
+                    return settingsError.textContent = '新密碼長度至少需要6位數。';
+                }
+                if (newPassword !== confirmNewPassword) {
+                    return settingsError.textContent = '兩次輸入的新密碼不一致。';
+                }
+
+                try {
+                    await updatePassword(currentUser, newPassword);
+                    showToast('密碼更新成功！');
+                    settingsModal.classList.add('hidden');
+                    changePasswordForm.reset();
+                } catch (error) {
+                    console.error("Password change error:", error);
+                    settingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
+                }
+            }
+            
             function renderAppView() {
                 if(!currentUserData) return;
                 
+                if (currentUserData.role !== ADMIN_ROLE) {
+                    settingsBtn.classList.remove('hidden');
+                } else {
+                    settingsBtn.classList.add('hidden');
+                }
+
                 if (FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === ADMIN_ROLE) {
                     calendarView.classList.remove('hidden');
                     appSubtitle.textContent = currentUserData.role === ADMIN_ROLE ? "團隊排班總覽" : "請在下方月曆選擇您的休假日。";
@@ -869,6 +955,17 @@
                 loginForm.addEventListener('submit', handleLogin);
                 logoutBtn.addEventListener('click', handleLogout);
 
+                settingsBtn.addEventListener('click', () => {
+                    settingsModal.classList.remove('hidden');
+                    settingsError.textContent = '';
+                    changePasswordForm.reset();
+                });
+                closeSettingsBtn.addEventListener('click', () => {
+                    settingsModal.classList.add('hidden');
+                });
+                changePasswordForm.addEventListener('submit', handleChangePassword);
+
+
                 calendarView.addEventListener('click', async (e) => {
                     if (e.target.closest('#prev-month-btn')) {
                         calendarDate.setMonth(calendarDate.getMonth() - 1);
@@ -883,6 +980,11 @@
                     }
                     if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
                         await handleCoverShiftAction(e);
+                    }
+                    if (e.target.closest('.delete-manual-assignment-btn')) {
+                        e.stopPropagation();
+                        const btn = e.target.closest('.delete-manual-assignment-btn');
+                        await handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
                     }
                 });
                 calendarView.addEventListener('submit', async (e) => {
