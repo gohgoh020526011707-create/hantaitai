@@ -721,7 +721,7 @@
                 const clickedDateStr = dayDiv.dataset.date;
                 const [year, month, day] = clickedDateStr.split('-').map(Number);
                 const clickedDate = new Date(year, month - 1, day);
-                const { adminHolidays: currentAdminHolidays = [] } = allData;
+                const { adminHolidays: currentAdminHolidays = [], userVacations = {} } = allData;
                 
                 if (currentUserData.role === ADMIN_ROLE) {
                     if (clickedDate.getDay() === 4) return showToast("星期四是固定公休日，無法更改。");
@@ -743,14 +743,36 @@
 
                 if (FULLTIME_ROLES.includes(currentUserData.role)) {
                     const vacationKey = `${currentUser.uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
-                    const currentVacations = allData.userVacations?.[vacationKey] || [];
-                    const newVacations = currentVacations.includes(clickedDateStr)
-                        ? currentVacations.filter(d => d !== clickedDateStr)
-                        : [...currentVacations, clickedDateStr];
+                    const currentVacations = userVacations[vacationKey] || [];
+                    const isVacation = currentVacations.includes(clickedDateStr);
                     
-                    if(newVacations.length > 4) return showToast('本月休假已選滿4天');
+                    let newVacations;
+
+                    if (isVacation) {
+                        newVacations = currentVacations.filter(d => d !== clickedDateStr);
+                    } else {
+                        if(currentVacations.length >= 4) return showToast('本月休假已選滿4天');
+                        
+                        const otherFullTimers = allUsers.filter(u => u.id !== currentUser.uid && FULLTIME_ROLES.includes(u.role));
+                        let isDayTaken = false;
+                        for (const otherUser of otherFullTimers) {
+                            const otherUserVacationKey = `${otherUser.id}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                            const otherUserVacations = userVacations[otherUserVacationKey] || [];
+                            if (otherUserVacations.includes(clickedDateStr)) {
+                                isDayTaken = true;
+                                break;
+                            }
+                        }
+
+                        if (isDayTaken) {
+                            return showToast(`已有其他正職人員於此日排休，無法選擇。`);
+                        }
+                        
+                        newVacations = [...currentVacations, clickedDateStr];
+                    }
                     
-                    await setDoc(doc(db, "scheduleData", "main"), { userVacations: { ...allData.userVacations, [vacationKey]: newVacations } }, { merge: true });
+                    await setDoc(doc(db, "scheduleData", "main"), { userVacations: { ...userVacations, [vacationKey]: newVacations } }, { merge: true });
+
                 } else if (currentUserData.role === PART_TIMER_ROLE) {
                     const availabilityKey = `${currentUser.uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
                     const currentAvailability = allData.userAvailability?.[availabilityKey] || [];
