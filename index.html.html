@@ -65,6 +65,13 @@
             /* 日     一     二     三     四     五     六 */
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
         }
+        .gemini-btn {
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+        .calendar-day:hover .gemini-btn {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -155,15 +162,40 @@
                         <span class="material-icons-outlined">close</span>
                     </button>
                 </div>
-                <form id="change-password-form" class="space-y-6">
-                    <h3 class="text-lg font-semibold">修改密碼</h3>
-                    <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
-                    <p id="settings-error" class="text-center text-red-500 text-sm mt-4"></p>
-                </form>
+                <div class="space-y-8">
+                    <form id="change-username-form" class="space-y-4">
+                        <h3 class="text-lg font-semibold">修改顯示名稱</h3>
+                        <input type="text" id="new-username" placeholder="新的顯示名稱" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新名稱</button>
+                        <p id="username-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
+                    </form>
+                    <hr>
+                    <form id="change-password-form" class="space-y-4">
+                        <h3 class="text-lg font-semibold">修改密碼</h3>
+                        <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
+                        <p id="password-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
+                    </form>
+                </div>
             </div>
         </div>
+
+        <!-- Gemini Task Modal -->
+        <div id="gemini-task-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-lg p-8 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold flex items-center gap-2">✨ AI 任務建議</h2>
+                    <button id="close-gemini-task-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <div id="gemini-task-content" class="min-h-[200px]">
+                    <!-- AI content will be injected here -->
+                </div>
+            </div>
+        </div>
+
 
         <!-- Notification Toast -->
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
@@ -247,7 +279,12 @@
             const settingsModal = document.getElementById('settings-modal');
             const closeSettingsBtn = document.getElementById('close-settings-btn');
             const changePasswordForm = document.getElementById('change-password-form');
-            const settingsError = document.getElementById('settings-error');
+            const changeUsernameForm = document.getElementById('change-username-form');
+            const passwordSettingsError = document.getElementById('password-settings-error');
+            const usernameSettingsError = document.getElementById('username-settings-error');
+            const geminiTaskModal = document.getElementById('gemini-task-modal');
+            const closeGeminiTaskBtn = document.getElementById('close-gemini-task-btn');
+            const geminiTaskContent = document.getElementById('gemini-task-content');
 
             // --- Helper Functions ---
             function showToast(message) {
@@ -403,6 +440,7 @@
                 `;
 
                 const coverShiftsList = document.getElementById('cover-shifts-list');
+                coverShiftsList.innerHTML = ''; // 清空舊的列表內容
                 if (availableCoverShifts.length === 0) {
                     coverShiftsList.innerHTML = `<p class="text-center text-gray-500 p-4">本月尚無代班需求。</p>`;
                 } else {
@@ -706,7 +744,12 @@
                             }
                         }
 
-                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
+                        let geminiButtonHtml = '';
+                        if (currentUserData.role === ADMIN_ROLE && workingUsers.length > 0) {
+                            geminiButtonHtml = `<button data-date="${dateString}" class="gemini-btn text-xs text-indigo-500 hover:underline">✨ AI 建議</button>`;
+                        }
+
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}${geminiButtonHtml}`;
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
@@ -799,7 +842,17 @@
                         const newCoverSignups = { ...currentCoverSignups };
                         delete newCoverSignups[shiftId];
                         await setDoc(doc(db, "scheduleData", "main"), { coverSignups: newCoverSignups }, { merge: true });
-                        showToast('已取消代班。');
+                        showToast("已取消代班。");
+
+                        // 強制重新獲取最新數據
+                        const docRef = doc(db, "scheduleData", "main");
+                        const snapshot = await getDoc(docRef);
+                        if (snapshot.exists()) {
+                            allData.coverSignups = snapshot.data().coverSignups || {};
+                        }
+                        
+                        // 重新渲染
+                        renderPartTimerView();
                     }
                 }
             }
@@ -845,6 +898,54 @@
                 await setDoc(doc(db, "scheduleData", "main"), { manualAssignments: newManualAssignments }, { merge: true });
                 showToast('手動排班已刪除！');
             }
+
+            // --- Gemini AI ---
+            async function getGeminiTaskSuggestion(date, workingUsers) {
+                geminiTaskModal.classList.remove('hidden');
+                geminiTaskContent.innerHTML = '<p class="text-center">✨ AI 正在為您產生建議...</p>';
+
+                const userRoles = workingUsers.map(u => {
+                    const originalUser = allUsers.find(au => au.username === u.username);
+                    return `${u.username} (${originalUser ? originalUser.role : '未知'})`;
+                }).join(', ');
+
+                const prompt = `
+                    這是一個餐廳內場的排班表。今天是 ${date}，上班的人員與職位有：${userRoles}。
+                    請根據這些人員的角色，為他們每個人建議一項今天可以執行的'特別任務'，讓餐廳營運更順暢。
+                    任務需要符合他們的職位，例如備菜班可以檢查庫存，炸爐班可以清潔設備，工讀生可以補充耗材。
+                    請用繁體中文，以條列式清單格式呈現，每項任務一行，格式為："【人員姓名】: 建議任務內容"。
+                `;
+
+                try {
+                    const apiKey = "";
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                    };
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates[0].content.parts[0].text;
+                    
+                    // Format the response into a nice list
+                    const formattedText = text.replace(/【/g, '<div class="mt-4"><strong class="text-indigo-600">').replace(/】/g, '</strong>').replace(/:/g, '：').replace(/\n/g, '</div>');
+                    geminiTaskContent.innerHTML = formattedText;
+
+                } catch (error) {
+                    console.error('Error with Gemini API:', error);
+                    geminiTaskContent.innerHTML = '<p class="text-red-500 text-center">無法取得 AI 建議，請稍後再試。</p>';
+                }
+            }
+
 
             // --- Auth Logic ---
             async function handleRegister(e) {
@@ -897,15 +998,15 @@
             
             async function handleChangePassword(e) {
                 e.preventDefault();
-                settingsError.textContent = '';
+                passwordSettingsError.textContent = '';
                 const newPassword = changePasswordForm.querySelector('#new-password').value;
                 const confirmNewPassword = changePasswordForm.querySelector('#confirm-new-password').value;
 
                 if (newPassword.length < 6) {
-                    return settingsError.textContent = '新密碼長度至少需要6位數。';
+                    return passwordSettingsError.textContent = '新密碼長度至少需要6位數。';
                 }
                 if (newPassword !== confirmNewPassword) {
-                    return settingsError.textContent = '兩次輸入的新密碼不一致。';
+                    return passwordSettingsError.textContent = '兩次輸入的新密碼不一致。';
                 }
 
                 try {
@@ -915,7 +1016,49 @@
                     changePasswordForm.reset();
                 } catch (error) {
                     console.error("Password change error:", error);
-                    settingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
+                    passwordSettingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
+                }
+            }
+
+            async function handleChangeUsername(e) {
+                e.preventDefault();
+                usernameSettingsError.textContent = '';
+                const newUsernameInput = changeUsernameForm.querySelector('#new-username');
+                const newUsername = newUsernameInput.value.trim();
+
+                if (!newUsername) {
+                    return usernameSettingsError.textContent = '姓名不能為空。';
+                }
+                if (newUsername === currentUserData.username) {
+                    return usernameSettingsError.textContent = '新舊名稱相同。';
+                }
+
+                const q = query(collection(db, "users"), where("username_lowercase", "==", newUsername.toLowerCase()));
+                const querySnapshot = await getDocs(q);
+                
+                let isTaken = false;
+                querySnapshot.forEach(doc => {
+                    if (doc.id !== currentUser.uid) {
+                        isTaken = true;
+                    }
+                });
+
+                if (isTaken) {
+                    return usernameSettingsError.textContent = '此名稱已被其他使用者占用。';
+                }
+
+                try {
+                    const userDocRef = doc(db, "users", currentUser.uid);
+                    await setDoc(userDocRef, {
+                        username: newUsername,
+                        username_lowercase: newUsername.toLowerCase()
+                    }, { merge: true });
+                    
+                    showToast('名稱更新成功！');
+                    settingsModal.classList.add('hidden');
+                } catch (error) {
+                    console.error("Username change error:", error);
+                    usernameSettingsError.textContent = '名稱更新失敗，請稍後再試。';
                 }
             }
             
@@ -979,13 +1122,20 @@
 
                 settingsBtn.addEventListener('click', () => {
                     settingsModal.classList.remove('hidden');
-                    settingsError.textContent = '';
+                    passwordSettingsError.textContent = '';
+                    usernameSettingsError.textContent = '';
                     changePasswordForm.reset();
+                    const newUsernameInput = document.getElementById('new-username');
+                    if(newUsernameInput && currentUserData) newUsernameInput.value = currentUserData.username;
                 });
                 closeSettingsBtn.addEventListener('click', () => {
                     settingsModal.classList.add('hidden');
                 });
                 changePasswordForm.addEventListener('submit', handleChangePassword);
+                changeUsernameForm.addEventListener('submit', handleChangeUsername);
+                closeGeminiTaskBtn.addEventListener('click', () => {
+                    geminiTaskModal.classList.add('hidden');
+                });
 
 
                 calendarView.addEventListener('click', async (e) => {
@@ -997,7 +1147,15 @@
                         calendarDate.setMonth(calendarDate.getMonth() + 1);
                         renderAppView();
                     }
-                    if (e.target.closest('.calendar-day')) {
+                    if (e.target.closest('.gemini-btn')) {
+                        e.stopPropagation();
+                        const btn = e.target.closest('.gemini-btn');
+                        const date = btn.dataset.date;
+                        const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
+                        const workingUsers = (dailySchedule[date] || []);
+                        getGeminiTaskSuggestion(date, workingUsers);
+                    }
+                    else if (e.target.closest('.calendar-day')) {
                         await handleDayClick(e);
                     }
                     if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
@@ -1021,3 +1179,4 @@
     </script>
 </body>
 </html>
+
