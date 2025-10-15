@@ -65,13 +65,6 @@
             /* 日     一     二     三     四     五     六 */
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
         }
-        .gemini-btn {
-            opacity: 0;
-            transition: opacity 0.2s ease-in-out;
-        }
-        .calendar-day:hover .gemini-btn {
-            opacity: 1;
-        }
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -162,40 +155,15 @@
                         <span class="material-icons-outlined">close</span>
                     </button>
                 </div>
-                <div class="space-y-8">
-                    <form id="change-username-form" class="space-y-4">
-                        <h3 class="text-lg font-semibold">修改顯示名稱</h3>
-                        <input type="text" id="new-username" placeholder="新的顯示名稱" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新名稱</button>
-                        <p id="username-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
-                    </form>
-                    <hr>
-                    <form id="change-password-form" class="space-y-4">
-                        <h3 class="text-lg font-semibold">修改密碼</h3>
-                        <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
-                        <p id="password-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
-                    </form>
-                </div>
+                <form id="change-password-form" class="space-y-6">
+                    <h3 class="text-lg font-semibold">修改密碼</h3>
+                    <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
+                    <p id="settings-error" class="text-center text-red-500 text-sm mt-4"></p>
+                </form>
             </div>
         </div>
-
-        <!-- Gemini Task Modal -->
-        <div id="gemini-task-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white w-full max-w-lg p-8 rounded-2xl shadow-lg">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold flex items-center gap-2">✨ AI 任務建議</h2>
-                    <button id="close-gemini-task-btn" class="p-2 rounded-full hover:bg-gray-200">
-                        <span class="material-icons-outlined">close</span>
-                    </button>
-                </div>
-                <div id="gemini-task-content" class="min-h-[200px]">
-                    <!-- AI content will be injected here -->
-                </div>
-            </div>
-        </div>
-
 
         <!-- Notification Toast -->
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
@@ -279,12 +247,7 @@
             const settingsModal = document.getElementById('settings-modal');
             const closeSettingsBtn = document.getElementById('close-settings-btn');
             const changePasswordForm = document.getElementById('change-password-form');
-            const changeUsernameForm = document.getElementById('change-username-form');
-            const passwordSettingsError = document.getElementById('password-settings-error');
-            const usernameSettingsError = document.getElementById('username-settings-error');
-            const geminiTaskModal = document.getElementById('gemini-task-modal');
-            const closeGeminiTaskBtn = document.getElementById('close-gemini-task-btn');
-            const geminiTaskContent = document.getElementById('gemini-task-content');
+            const settingsError = document.getElementById('settings-error');
 
             // --- Helper Functions ---
             function showToast(message) {
@@ -835,11 +798,9 @@
                     if (currentCoverSignups[shiftId] === currentUser.uid) {
                         const newCoverSignups = { ...currentCoverSignups };
                         delete newCoverSignups[shiftId];
-                        
                         await setDoc(doc(db, "scheduleData", "main"), { coverSignups: newCoverSignups }, { merge: true });
-                       showToast(\'已取消代班。\');
-        renderCalendar(); // 重新渲染主月曆
-        renderPartTimerView(); // 新增：重新渲染工讀生視圖，包括可代班列表                    }
+                        showToast('已取消代班。');
+                    }
                 }
             }
 
@@ -936,15 +897,15 @@
             
             async function handleChangePassword(e) {
                 e.preventDefault();
-                passwordSettingsError.textContent = '';
+                settingsError.textContent = '';
                 const newPassword = changePasswordForm.querySelector('#new-password').value;
                 const confirmNewPassword = changePasswordForm.querySelector('#confirm-new-password').value;
 
                 if (newPassword.length < 6) {
-                    return passwordSettingsError.textContent = '新密碼長度至少需要6位數。';
+                    return settingsError.textContent = '新密碼長度至少需要6位數。';
                 }
                 if (newPassword !== confirmNewPassword) {
-                    return passwordSettingsError.textContent = '兩次輸入的新密碼不一致。';
+                    return settingsError.textContent = '兩次輸入的新密碼不一致。';
                 }
 
                 try {
@@ -954,49 +915,7 @@
                     changePasswordForm.reset();
                 } catch (error) {
                     console.error("Password change error:", error);
-                    passwordSettingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
-                }
-            }
-
-            async function handleChangeUsername(e) {
-                e.preventDefault();
-                usernameSettingsError.textContent = '';
-                const newUsernameInput = changeUsernameForm.querySelector('#new-username');
-                const newUsername = newUsernameInput.value.trim();
-
-                if (!newUsername) {
-                    return usernameSettingsError.textContent = '姓名不能為空。';
-                }
-                if (newUsername === currentUserData.username) {
-                    return usernameSettingsError.textContent = '新舊名稱相同。';
-                }
-
-                const q = query(collection(db, "users"), where("username_lowercase", "==", newUsername.toLowerCase()));
-                const querySnapshot = await getDocs(q);
-                
-                let isTaken = false;
-                querySnapshot.forEach(doc => {
-                    if (doc.id !== currentUser.uid) {
-                        isTaken = true;
-                    }
-                });
-
-                if (isTaken) {
-                    return usernameSettingsError.textContent = '此名稱已被其他使用者占用。';
-                }
-
-                try {
-                    const userDocRef = doc(db, "users", currentUser.uid);
-                    await setDoc(userDocRef, {
-                        username: newUsername,
-                        username_lowercase: newUsername.toLowerCase()
-                    }, { merge: true });
-                    
-                    showToast('名稱更新成功！');
-                    settingsModal.classList.add('hidden');
-                } catch (error) {
-                    console.error("Username change error:", error);
-                    usernameSettingsError.textContent = '名稱更新失敗，請稍後再試。';
+                    settingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
                 }
             }
             
@@ -1060,17 +979,13 @@
 
                 settingsBtn.addEventListener('click', () => {
                     settingsModal.classList.remove('hidden');
-                    passwordSettingsError.textContent = '';
-                    usernameSettingsError.textContent = '';
+                    settingsError.textContent = '';
                     changePasswordForm.reset();
-                    const newUsernameInput = document.getElementById('new-username');
-                    if(newUsernameInput && currentUserData) newUsernameInput.value = currentUserData.username;
                 });
                 closeSettingsBtn.addEventListener('click', () => {
                     settingsModal.classList.add('hidden');
                 });
                 changePasswordForm.addEventListener('submit', handleChangePassword);
-                changeUsernameForm.addEventListener('submit', handleChangeUsername);
 
 
                 calendarView.addEventListener('click', async (e) => {
@@ -1106,4 +1021,3 @@
     </script>
 </body>
 </html>
-
