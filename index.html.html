@@ -501,7 +501,21 @@
             }
 
             async updateCoverSignups(signups) {
-                await setDoc(doc(this.db, "scheduleData", "main"), { coverSignups: signups }, { merge: true });
+                try {
+                    // 獲取當前所有資料
+                    const currentData = this.allData;
+                    // 更新 coverSignups 並保持其他資料不變
+                    const updatedData = { ...currentData, coverSignups: signups };
+                    
+                    console.log('更新代班資料到資料庫:', updatedData.coverSignups);
+                    
+                    await setDoc(doc(this.db, "scheduleData", "main"), updatedData);
+                    
+                    console.log('代班資料更新成功');
+                } catch (error) {
+                    console.error('更新代班資料失敗:', error);
+                    throw error;
+                }
             }
 
             async updateManualAssignments(assignments) {
@@ -828,14 +842,30 @@
                 if (button.classList.contains('signup-cover-btn')) {
                     if (currentCoverSignups[shiftId]) return this.uiManager.showToast('此班次已被預約！');
                     
-                    await this.scheduleManager.updateCoverSignups({ ...currentCoverSignups, [shiftId]: this.authManager.getCurrentUser().uid });
-                    this.uiManager.showToast('成功預約代班！');
+                    try {
+                        await this.scheduleManager.updateCoverSignups({ ...currentCoverSignups, [shiftId]: this.authManager.getCurrentUser().uid });
+                        this.uiManager.showToast('成功預約代班！');
+                    } catch (error) {
+                        console.error('預約代班失敗:', error);
+                        this.uiManager.showToast('預約代班失敗，請稍後再試。');
+                    }
                 } else if (button.classList.contains('cancel-cover-btn')) {
                     if (currentCoverSignups[shiftId] === this.authManager.getCurrentUser().uid) {
-                        const newCoverSignups = { ...currentCoverSignups };
-                        delete newCoverSignups[shiftId];
-                        await this.scheduleManager.updateCoverSignups(newCoverSignups);
-                        this.uiManager.showToast('已取消代班。');
+                        try {
+                            const newCoverSignups = { ...currentCoverSignups };
+                            delete newCoverSignups[shiftId];
+                            
+                            console.log('取消代班前:', currentCoverSignups);
+                            console.log('取消代班後:', newCoverSignups);
+                            
+                            await this.scheduleManager.updateCoverSignups(newCoverSignups);
+                            this.uiManager.showToast('已取消代班。');
+                        } catch (error) {
+                            console.error('取消代班失敗:', error);
+                            this.uiManager.showToast('取消代班失敗，請稍後再試。');
+                        }
+                    } else {
+                        this.uiManager.showToast('您無法取消其他人的代班。');
                     }
                 }
                 
