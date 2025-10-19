@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>員工自主排班系統 (網頁版)</title>
+    <title>韓泰泰排班系統</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Google Fonts 和 Icons -->
@@ -115,7 +115,7 @@
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div class="flex items-center gap-3">
                         <span class="material-icons-outlined text-2xl md:text-3xl text-indigo-600">event_available</span>
-                        <h1 class="text-2xl md:text-3xl font-bold text-gray-900">員工自主排班系統</h1>
+                        <h1 class="text-2xl md:text-3xl font-bold text-gray-900">韓泰泰排班系統</h1>
                     </div>
                     <div class="flex items-center gap-4">
                         <p class="text-xs sm:text-sm text-gray-600">使用者: <span id="userName" class="font-semibold bg-gray-100 p-1 rounded"></span> (<span id="userRole" class="font-semibold"></span>)</p>
@@ -354,40 +354,85 @@
                     return this.holidaysCache[year];
                 }
 
-                const fallback2025 = new Map([
-                    ['2025-01-01', '中華民國開國紀念日'],['2025-01-28', '農曆除夕'],['2025-01-29', '農曆春節'],['2025-01-30', '農曆春節'],
-                    ['2025-01-31', '農曆春節'],['2025-02-28', '和平紀念日'],['2025-04-04', '兒童節'],['2025-05-31', '端午節'],
-                    ['2025-10-06', '中秋節'],['2025-10-10', '國慶日']
-                ]);
+                // 台灣國定假日備用資料
+                const fallbackHolidays = {
+                    2024: new Map([
+                        ['2024-01-01', '中華民國開國紀念日'], ['2024-02-08', '農曆除夕'], ['2024-02-09', '農曆春節'],
+                        ['2024-02-10', '農曆春節'], ['2024-02-11', '農曆春節'], ['2024-02-12', '農曆春節'],
+                        ['2024-02-13', '農曆春節'], ['2024-02-14', '農曆春節'], ['2024-02-28', '和平紀念日'],
+                        ['2024-04-04', '兒童節'], ['2024-04-05', '清明節'], ['2024-05-01', '勞動節'],
+                        ['2024-06-10', '端午節'], ['2024-09-17', '中秋節'], ['2024-10-10', '國慶日']
+                    ]),
+                    2025: new Map([
+                        ['2025-01-01', '中華民國開國紀念日'], ['2025-01-28', '農曆除夕'], ['2025-01-29', '農曆春節'],
+                        ['2025-01-30', '農曆春節'], ['2025-01-31', '農曆春節'], ['2025-02-28', '和平紀念日'],
+                        ['2025-04-04', '兒童節'], ['2025-04-05', '清明節'], ['2025-05-01', '勞動節'],
+                        ['2025-05-31', '端午節'], ['2025-10-06', '中秋節'], ['2025-10-10', '國慶日']
+                    ]),
+                    2026: new Map([
+                        ['2026-01-01', '中華民國開國紀念日'], ['2026-01-28', '農曆除夕'], ['2026-01-29', '農曆春節'],
+                        ['2026-01-30', '農曆春節'], ['2026-01-31', '農曆春節'], ['2026-02-28', '和平紀念日'],
+                        ['2026-04-04', '兒童節'], ['2026-04-05', '清明節'], ['2026-05-01', '勞動節'],
+                        ['2026-05-20', '端午節'], ['2026-09-25', '中秋節'], ['2026-10-10', '國慶日']
+                    ])
+                };
 
-                try {
-                    const response = await fetch(`https://cdn.jsdelivr.net/gh/g0v/tw-holiday@master/data/${year}.json`);
-                    if (!response.ok) {
-                        if (year === 2025 || year === '2025') {
-                            console.warn(`無法從網路獲取 ${year} 年的假日資訊，將使用內建的備用資料。`);
-                            this.holidaysCache[year] = fallback2025;
-                            return this.holidaysCache[year];
+                // 嘗試多個API來源
+                const apiUrls = [
+                    `https://cdn.jsdelivr.net/gh/g0v/tw-holiday@master/data/${year}.json`,
+                    `https://raw.githubusercontent.com/g0v/tw-holiday/master/data/${year}.json`,
+                    `https://holidays.moes.tw/api/holidays/${year}`
+                ];
+
+                for (const url of apiUrls) {
+                    try {
+                        console.log(`嘗試從 ${url} 獲取 ${year} 年假日資料...`);
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                            },
+                            timeout: 5000 // 5秒超時
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            const holidaysMap = new Map();
+                            
+                            // 處理不同API格式
+                            if (data.holidays && Array.isArray(data.holidays)) {
+                                data.holidays.forEach(holiday => {
+                                    if (holiday.isHoliday) { 
+                                       holidaysMap.set(holiday.date, holiday.name);
+                                    }
+                                });
+                            } else if (Array.isArray(data)) {
+                                data.forEach(holiday => {
+                                    if (holiday.isHoliday) { 
+                                       holidaysMap.set(holiday.date, holiday.name);
+                                    }
+                                });
+                            }
+                            
+                            if (holidaysMap.size > 0) {
+                                console.log(`成功從 ${url} 獲取 ${year} 年假日資料，共 ${holidaysMap.size} 個假日`);
+                                this.holidaysCache[year] = holidaysMap;
+                                return holidaysMap;
+                            }
                         }
-                        console.warn(`Could not fetch holidays for ${year}. The API might not have data for this year.`);
-                        this.holidaysCache[year] = new Map();
-                        return this.holidaysCache[year];
+                    } catch (error) {
+                        console.warn(`從 ${url} 獲取假日資料失敗:`, error.message);
+                        continue;
                     }
-                    const data = await response.json();
-                    const holidaysMap = new Map();
-                    data.holidays.forEach(holiday => {
-                        if (holiday.isHoliday) { 
-                           holidaysMap.set(holiday.date, holiday.name);
-                        }
-                    });
-                    this.holidaysCache[year] = holidaysMap;
-                    return holidaysMap;
-                } catch (error) {
-                    console.warn("Network error fetching holiday data:", error);
-                     if (year === 2025 || year === '2025') {
-                        console.warn(`網路錯誤導致無法獲取 ${year} 年的假日資訊，將使用內建的備用資料。`);
-                        this.holidaysCache[year] = fallback2025;
-                        return this.holidaysCache[year];
-                    }
+                }
+
+                // 如果所有API都失敗，使用備用資料
+                if (fallbackHolidays[year]) {
+                    console.warn(`無法從網路獲取 ${year} 年的假日資訊，使用內建的備用資料。`);
+                    this.holidaysCache[year] = fallbackHolidays[year];
+                    return this.holidaysCache[year];
+                } else {
+                    console.warn(`沒有 ${year} 年的備用假日資料，返回空資料。`);
                     this.holidaysCache[year] = new Map();
                     return this.holidaysCache[year];
                 }
