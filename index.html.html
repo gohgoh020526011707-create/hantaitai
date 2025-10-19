@@ -65,13 +65,6 @@
             /* 日     一     二     三     四     五     六 */
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
         }
-        .gemini-btn {
-            opacity: 0;
-            transition: opacity 0.2s ease-in-out;
-        }
-        .calendar-day:hover .gemini-btn {
-            opacity: 1;
-        }
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -181,20 +174,6 @@
             </div>
         </div>
 
-        <!-- Gemini Task Modal -->
-        <div id="gemini-task-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div class="bg-white w-full max-w-lg p-8 rounded-2xl shadow-lg">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold flex items-center gap-2">✨ AI 任務建議</h2>
-                    <button id="close-gemini-task-btn" class="p-2 rounded-full hover:bg-gray-200">
-                        <span class="material-icons-outlined">close</span>
-                    </button>
-                </div>
-                <div id="gemini-task-content" class="min-h-[200px]">
-                    <!-- AI content will be injected here -->
-                </div>
-            </div>
-        </div>
 
 
         <!-- Notification Toast -->
@@ -228,80 +207,151 @@
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // ===================================================================================
-        // === 重要：請將下方的 firebaseConfig 物件替換成您自己的 Firebase 專案設定 ===
+        // === 認證管理類別 (AuthManager) ===
         // ===================================================================================
-        const firebaseConfig = {
-        apiKey: "AIzaSyBEMnLL-ppl8-jQnA1RzZW8JfsUjCqEOFQ",
-        authDomain: "schedule-hantaitai.firebaseapp.com",
-        databaseURL: "https://schedule-hantaitai-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "schedule-hantaitai",
-        storageBucket: "schedule-hantaitai.firebasestorage.app",
-        messagingSenderId: "600535535784",
-        appId: "1:600535535784:web:397ad1387e60f87479b29d"
-        };
-        // ===================================================================================
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- App State ---
-            let currentUser = null; // Will contain auth user object
-            let currentUserData = null; // Will contain user data from Firestore
-            let allUsers = [];
-            let allData = {}; // A single object to hold all schedule data for realtime updates
-            let calendarDate = new Date();
-            let holidaysCache = {}; // Cache for fetched holiday data
-            let unsubscribeListeners = []; // To store unsubscribe functions for cleanup on logout
-            
-            const ADMIN_ROLE = "管理者";
-            const FULLTIME_ROLES = ["内場備菜班", "内場炸爐班"];
-            const PART_TIMER_ROLE = "内場工讀生";
-
-            // --- UI Elements ---
-            const authContainer = document.getElementById('auth-container');
-            const appContainer = document.getElementById('app');
-            const loginView = document.getElementById('login-view');
-            const registerView = document.getElementById('register-view');
-            const loginForm = document.getElementById('login-form');
-            const registerForm = document.getElementById('register-form');
-            const authError = document.getElementById('auth-error');
-            const showRegisterBtn = document.getElementById('show-register');
-            const showLoginBtn = document.getElementById('show-login');
-            const logoutBtn = document.getElementById('logout-btn');
-            const userNameSpan = document.getElementById('userName');
-            const userRoleSpan = document.getElementById('userRole');
-            const appSubtitle = document.getElementById('app-subtitle');
-            const calendarView = document.getElementById('calendar-view');
-            const settingsBtn = document.getElementById('settings-btn');
-            const settingsModal = document.getElementById('settings-modal');
-            const closeSettingsBtn = document.getElementById('close-settings-btn');
-            const changePasswordForm = document.getElementById('change-password-form');
-            const changeUsernameForm = document.getElementById('change-username-form');
-            const passwordSettingsError = document.getElementById('password-settings-error');
-            const usernameSettingsError = document.getElementById('username-settings-error');
-            const geminiTaskModal = document.getElementById('gemini-task-modal');
-            const closeGeminiTaskBtn = document.getElementById('close-gemini-task-btn');
-            const geminiTaskContent = document.getElementById('gemini-task-content');
-
-            // --- Helper Functions ---
-            function showToast(message) {
-                const toast = document.getElementById('toast');
-                const toastMessage = document.getElementById('toast-message');
-                toastMessage.textContent = message;
-                toast.classList.remove('translate-y-20', 'opacity-0');
-                toast.classList.add('translate-y-0', 'opacity-100');
-                setTimeout(() => {
-                    toast.classList.remove('translate-y-0', 'opacity-100');
-                    toast.classList.add('translate-y-20', 'opacity-0');
-                }, 3000);
+        class AuthManager {
+            constructor(auth, db) {
+                this.auth = auth;
+                this.db = db;
+                this.currentUser = null;
+                this.currentUserData = null;
             }
 
-            async function fetchHolidays(year) {
-                if (holidaysCache[year]) {
-                    return holidaysCache[year];
+            async register(username, password, passwordConfirm, role) {
+                if (!username || !password || !role || !passwordConfirm) {
+                    throw new Error('所有欄位皆為必填。');
+                }
+                if (password.length < 6) {
+                    throw new Error('密碼長度至少需要6位數。');
+                }
+                if (password !== passwordConfirm) {
+                    throw new Error('兩次輸入的密碼不一致。');
+                }
+                
+                const q = query(collection(this.db, "users"), where("username_lowercase", "==", username.toLowerCase()));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    throw new Error('此用戶名稱已被使用。');
+                }
+                
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(this.auth, `${username.toLowerCase()}@schedule-app.com`, password);
+                    const user = userCredential.user;
+                    await setDoc(doc(this.db, "users", user.uid), {
+                        username: username,
+                        username_lowercase: username.toLowerCase(),
+                        role: role
+                    });
+                } catch (error) {
+                    console.error("Register error:", error);
+                    throw new Error("註冊失敗，請稍後再試。");
+                }
+            }
+
+            async login(username, password) {
+                try {
+                    await signInWithEmailAndPassword(this.auth, `${username.trim().toLowerCase()}@schedule-app.com`, password);
+                } catch (error) {
+                    console.error("Login error:", error);
+                    throw new Error("用戶名稱或密碼錯誤。");
+                }
+            }
+
+            async logout() {
+                await signOut(this.auth);
+            }
+
+            async changePassword(newPassword, confirmNewPassword) {
+                if (newPassword.length < 6) {
+                    throw new Error('新密碼長度至少需要6位數。');
+                }
+                if (newPassword !== confirmNewPassword) {
+                    throw new Error('兩次輸入的新密碼不一致。');
+                }
+
+                try {
+                    await updatePassword(this.currentUser, newPassword);
+                } catch (error) {
+                    console.error("Password change error:", error);
+                    throw new Error('密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。');
+                }
+            }
+
+            async changeUsername(newUsername) {
+                if (!newUsername) {
+                    throw new Error('姓名不能為空。');
+                }
+                if (newUsername === this.currentUserData.username) {
+                    throw new Error('新舊名稱相同。');
+                }
+
+                const q = query(collection(this.db, "users"), where("username_lowercase", "==", newUsername.toLowerCase()));
+                const querySnapshot = await getDocs(q);
+                
+                let isTaken = false;
+                querySnapshot.forEach(doc => {
+                    if (doc.id !== this.currentUser.uid) {
+                        isTaken = true;
+                    }
+                });
+
+                if (isTaken) {
+                    throw new Error('此名稱已被其他使用者占用。');
+                }
+
+                try {
+                    const userDocRef = doc(this.db, "users", this.currentUser.uid);
+                    await setDoc(userDocRef, {
+                        username: newUsername,
+                        username_lowercase: newUsername.toLowerCase()
+                    }, { merge: true });
+                } catch (error) {
+                    console.error("Username change error:", error);
+                    throw new Error('名稱更新失敗，請稍後再試。');
+                }
+            }
+
+            async getUserData(user) {
+                if (!user) return null;
+                
+                const userDocRef = doc(this.db, "users", user.uid);
+                const userDocSnap = await getDoc(userDocRef);
+                
+                if (userDocSnap.exists()) {
+                    return { uid: user.uid, ...userDocSnap.data() };
+                }
+                return null;
+            }
+
+            setCurrentUser(user) {
+                this.currentUser = user;
+            }
+
+            setCurrentUserData(userData) {
+                this.currentUserData = userData;
+            }
+
+            getCurrentUser() {
+                return this.currentUser;
+            }
+
+            getCurrentUserData() {
+                return this.currentUserData;
+            }
+        }
+
+        // ===================================================================================
+        // === 月曆管理類別 (CalendarManager) ===
+        // ===================================================================================
+        class CalendarManager {
+            constructor() {
+                this.calendarDate = new Date();
+                this.holidaysCache = {};
+            }
+
+            async fetchHolidays(year) {
+                if (this.holidaysCache[year]) {
+                    return this.holidaysCache[year];
                 }
 
                 const fallback2025 = new Map([
@@ -315,12 +365,12 @@
                     if (!response.ok) {
                         if (year === 2025 || year === '2025') {
                             console.warn(`無法從網路獲取 ${year} 年的假日資訊，將使用內建的備用資料。`);
-                            holidaysCache[year] = fallback2025;
-                            return holidaysCache[year];
+                            this.holidaysCache[year] = fallback2025;
+                            return this.holidaysCache[year];
                         }
                         console.warn(`Could not fetch holidays for ${year}. The API might not have data for this year.`);
-                        holidaysCache[year] = new Map();
-                        return holidaysCache[year];
+                        this.holidaysCache[year] = new Map();
+                        return this.holidaysCache[year];
                     }
                     const data = await response.json();
                     const holidaysMap = new Map();
@@ -329,31 +379,71 @@
                            holidaysMap.set(holiday.date, holiday.name);
                         }
                     });
-                    holidaysCache[year] = holidaysMap;
+                    this.holidaysCache[year] = holidaysMap;
                     return holidaysMap;
                 } catch (error) {
                     console.warn("Network error fetching holiday data:", error);
                      if (year === 2025 || year === '2025') {
                         console.warn(`網路錯誤導致無法獲取 ${year} 年的假日資訊，將使用內建的備用資料。`);
-                        holidaysCache[year] = fallback2025;
-                        return holidaysCache[year];
+                        this.holidaysCache[year] = fallback2025;
+                        return this.holidaysCache[year];
                     }
-                    holidaysCache[year] = new Map();
-                    return holidaysCache[year];
+                    this.holidaysCache[year] = new Map();
+                    return this.holidaysCache[year];
                 }
             }
 
-            // --- Realtime Data Listeners ---
-            function setupRealtimeListeners() {
-                const dataDocRef = doc(db, "scheduleData", "main");
-                const usersColRef = collection(db, "users");
+            getCalendarDate() {
+                return this.calendarDate;
+            }
+
+            setCalendarDate(date) {
+                this.calendarDate = date;
+            }
+
+            getMonth() {
+                return this.calendarDate.getMonth();
+            }
+
+            getYear() {
+                return this.calendarDate.getFullYear();
+            }
+
+            previousMonth() {
+                this.calendarDate.setMonth(this.calendarDate.getMonth() - 1);
+            }
+
+            nextMonth() {
+                this.calendarDate.setMonth(this.calendarDate.getMonth() + 1);
+            }
+        }
+
+        // ===================================================================================
+        // === 排班管理類別 (ScheduleManager) ===
+        // ===================================================================================
+        class ScheduleManager {
+            constructor(db) {
+                this.db = db;
+                this.allData = {};
+                this.allUsers = [];
+                this.unsubscribeListeners = [];
+                this.onDataChangeCallback = null;
+            }
+
+            setOnDataChangeCallback(callback) {
+                this.onDataChangeCallback = callback;
+            }
+
+            setupRealtimeListeners() {
+                const dataDocRef = doc(this.db, "scheduleData", "main");
+                const usersColRef = collection(this.db, "users");
 
                 const unsubData = onSnapshot(dataDocRef, (docSnap) => {
                     if (docSnap.exists()) {
-                        allData = docSnap.data();
+                        this.allData = docSnap.data();
                     } else {
                         // Initialize data if it doesn't exist
-                        setDoc(doc(db, "scheduleData", "main"), {
+                        setDoc(doc(this.db, "scheduleData", "main"), {
                             userVacations: {},
                             userAvailability: {},
                             coverSignups: {},
@@ -361,31 +451,472 @@
                             manualAssignments: {}
                         });
                     }
-                    if (currentUserData) renderAppView(); // Re-render when data changes
+                    // 觸發重新渲染
+                    if (this.onDataChangeCallback) {
+                        this.onDataChangeCallback();
+                    }
                 });
 
-                const unsubUsers = onSnapshot(query(collection(db, "users")), (snapshot) => {
-                    allUsers = [];
-                    snapshot.forEach(doc => allUsers.push({ id: doc.id, ...doc.data() }));
-                    if (currentUserData) renderAppView(); // Re-render when users change
+                const unsubUsers = onSnapshot(query(collection(this.db, "users")), (snapshot) => {
+                    this.allUsers = [];
+                    snapshot.forEach(doc => this.allUsers.push({ id: doc.id, ...doc.data() }));
+                    // 觸發重新渲染
+                    if (this.onDataChangeCallback) {
+                        this.onDataChangeCallback();
+                    }
                 });
                 
-                unsubscribeListeners.push(unsubData, unsubUsers);
+                this.unsubscribeListeners.push(unsubData, unsubUsers);
             }
 
-            function cleanupListeners() {
-                unsubscribeListeners.forEach(unsub => unsub());
-                unsubscribeListeners = [];
+            cleanupListeners() {
+                this.unsubscribeListeners.forEach(unsub => unsub());
+                this.unsubscribeListeners = [];
             }
 
-            // --- Calendar & Shift Logic ---
-            async function renderPartTimerView() {
-                const month = calendarDate.getMonth();
-                const year = calendarDate.getFullYear();
+            getAllData() {
+                return this.allData;
+            }
+
+            getAllUsers() {
+                return this.allUsers;
+            }
+
+            async updateUserVacation(userId, year, month, vacations) {
+                const vacationKey = `${userId}-${year}-${month}`;
+                await setDoc(doc(this.db, "scheduleData", "main"), { 
+                    userVacations: { ...this.allData.userVacations, [vacationKey]: vacations } 
+                }, { merge: true });
+            }
+
+            async updateUserAvailability(userId, year, month, availability) {
+                const availabilityKey = `${userId}-${year}-${month}`;
+                await setDoc(doc(this.db, "scheduleData", "main"), { 
+                    userAvailability: { ...this.allData.userAvailability, [availabilityKey]: availability } 
+                }, { merge: true });
+            }
+
+            async updateAdminHolidays(holidays) {
+                await setDoc(doc(this.db, "scheduleData", "main"), { adminHolidays: holidays }, { merge: true });
+            }
+
+            async updateCoverSignups(signups) {
+                await setDoc(doc(this.db, "scheduleData", "main"), { coverSignups: signups }, { merge: true });
+            }
+
+            async updateManualAssignments(assignments) {
+                await setDoc(doc(this.db, "scheduleData", "main"), { manualAssignments: assignments }, { merge: true });
+            }
+        }
+
+        // ===================================================================================
+        // === UI管理類別 (UIManager) ===
+        // ===================================================================================
+        class UIManager {
+            constructor() {
+                this.initializeElements();
+            }
+
+            initializeElements() {
+                // Auth elements
+                this.authContainer = document.getElementById('auth-container');
+                this.appContainer = document.getElementById('app');
+                this.loginView = document.getElementById('login-view');
+                this.registerView = document.getElementById('register-view');
+                this.loginForm = document.getElementById('login-form');
+                this.registerForm = document.getElementById('register-form');
+                this.authError = document.getElementById('auth-error');
+                this.showRegisterBtn = document.getElementById('show-register');
+                this.showLoginBtn = document.getElementById('show-login');
+                this.logoutBtn = document.getElementById('logout-btn');
+                this.userNameSpan = document.getElementById('userName');
+                this.userRoleSpan = document.getElementById('userRole');
+                this.appSubtitle = document.getElementById('app-subtitle');
+                this.calendarView = document.getElementById('calendar-view');
+                this.settingsBtn = document.getElementById('settings-btn');
+                this.settingsModal = document.getElementById('settings-modal');
+                this.closeSettingsBtn = document.getElementById('close-settings-btn');
+                this.changePasswordForm = document.getElementById('change-password-form');
+                this.changeUsernameForm = document.getElementById('change-username-form');
+                this.passwordSettingsError = document.getElementById('password-settings-error');
+                this.usernameSettingsError = document.getElementById('username-settings-error');
+            }
+
+            showToast(message) {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toast-message');
+                toastMessage.textContent = message;
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 3000);
+            }
+
+            showAuthView() {
+                this.authContainer.classList.remove('hidden');
+                this.appContainer.classList.add('hidden');
+            }
+
+            showAppView() {
+                this.authContainer.classList.add('hidden');
+                this.appContainer.classList.remove('hidden');
+            }
+
+            showLoginForm() {
+                this.loginView.classList.remove('hidden');
+                this.registerView.classList.add('hidden');
+                this.authError.textContent = '';
+            }
+
+            showRegisterForm() {
+                this.registerView.classList.remove('hidden');
+                this.loginView.classList.add('hidden');
+                this.authError.textContent = '';
+            }
+
+            showSettingsModal() {
+                this.settingsModal.classList.remove('hidden');
+                this.passwordSettingsError.textContent = '';
+                this.usernameSettingsError.textContent = '';
+                this.changePasswordForm.reset();
+            }
+
+            hideSettingsModal() {
+                this.settingsModal.classList.add('hidden');
+            }
+
+            updateUserInfo(username, role) {
+                this.userNameSpan.textContent = username;
+                this.userRoleSpan.textContent = role;
+            }
+
+            updateAppSubtitle(text) {
+                this.appSubtitle.textContent = text;
+            }
+
+            toggleSettingsButton(show) {
+                if (show) {
+                    this.settingsBtn.classList.remove('hidden');
+                } else {
+                    this.settingsBtn.classList.add('hidden');
+                }
+            }
+
+            showCalendarView() {
+                this.calendarView.classList.remove('hidden');
+            }
+
+            hideCalendarView() {
+                this.calendarView.classList.add('hidden');
+            }
+
+            setAuthError(message) {
+                this.authError.textContent = message;
+            }
+
+            setPasswordError(message) {
+                this.passwordSettingsError.textContent = message;
+            }
+
+            setUsernameError(message) {
+                this.usernameSettingsError.textContent = message;
+            }
+        }
+
+        // ===================================================================================
+        // === 主應用程式類別 (ScheduleApp) ===
+        // ===================================================================================
+        class ScheduleApp {
+            constructor() {
+                this.initializeFirebase();
+                this.initializeManagers();
+                this.initializeConstants();
+                this.setupEventListeners();
+                this.setupAuthStateListener();
+            }
+
+            initializeFirebase() {
+                // ===================================================================================
+                // === 重要：請將下方的 firebaseConfig 物件替換成您自己的 Firebase 專案設定 ===
+                // ===================================================================================
+                const firebaseConfig = {
+                apiKey: "AIzaSyBEMnLL-ppl8-jQnA1RzZW8JfsUjCqEOFQ",
+                authDomain: "schedule-hantaitai.firebaseapp.com",
+                databaseURL: "https://schedule-hantaitai-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "schedule-hantaitai",
+                storageBucket: "schedule-hantaitai.firebasestorage.app",
+                messagingSenderId: "600535535784",
+                appId: "1:600535535784:web:397ad1387e60f87479b29d"
+                };
+                // ===================================================================================
+
+                // Initialize Firebase
+                const app = initializeApp(firebaseConfig);
+                this.auth = getAuth(app);
+                this.db = getFirestore(app);
+            }
+
+            initializeManagers() {
+                this.authManager = new AuthManager(this.auth, this.db);
+                this.calendarManager = new CalendarManager();
+                this.scheduleManager = new ScheduleManager(this.db);
+                this.uiManager = new UIManager();
+            }
+
+            initializeConstants() {
+                this.ADMIN_ROLE = "管理者";
+                this.FULLTIME_ROLES = ["内場備菜班", "内場炸爐班"];
+                this.PART_TIMER_ROLE = "内場工讀生";
+            }
+
+            async handleRegister(e) {
+                e.preventDefault();
+                this.uiManager.setAuthError('');
+                
+                const username = this.uiManager.registerForm.querySelector('#register-username').value.trim();
+                const password = this.uiManager.registerForm.querySelector('#register-password').value;
+                const passwordConfirm = this.uiManager.registerForm.querySelector('#register-password-confirm').value;
+                const role = this.uiManager.registerForm.querySelector('#register-role').value;
+                
+                try {
+                    await this.authManager.register(username, password, passwordConfirm, role);
+                    this.uiManager.showToast('註冊成功！');
+                } catch (error) {
+                    this.uiManager.setAuthError(error.message);
+                }
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                this.uiManager.setAuthError('');
+                
+                const username = this.uiManager.loginForm.querySelector('#login-username').value.trim().toLowerCase();
+                const password = this.uiManager.loginForm.querySelector('#login-password').value;
+                
+                try {
+                    await this.authManager.login(username, password);
+                } catch (error) {
+                    this.uiManager.setAuthError(error.message);
+                }
+            }
+
+            async handleLogout() {
+                await this.authManager.logout();
+            }
+
+            async handleChangePassword(e) {
+                e.preventDefault();
+                this.uiManager.setPasswordError('');
+                
+                const newPassword = this.uiManager.changePasswordForm.querySelector('#new-password').value;
+                const confirmNewPassword = this.uiManager.changePasswordForm.querySelector('#confirm-new-password').value;
+
+                try {
+                    await this.authManager.changePassword(newPassword, confirmNewPassword);
+                    this.uiManager.showToast('密碼更新成功！');
+                    this.uiManager.hideSettingsModal();
+                    this.uiManager.changePasswordForm.reset();
+                } catch (error) {
+                    this.uiManager.setPasswordError(error.message);
+                }
+            }
+
+            async handleChangeUsername(e) {
+                e.preventDefault();
+                this.uiManager.setUsernameError('');
+                
+                const newUsernameInput = this.uiManager.changeUsernameForm.querySelector('#new-username');
+                const newUsername = newUsernameInput.value.trim();
+
+                try {
+                    await this.authManager.changeUsername(newUsername);
+                    this.uiManager.showToast('名稱更新成功！');
+                    this.uiManager.hideSettingsModal();
+                } catch (error) {
+                    this.uiManager.setUsernameError(error.message);
+                }
+            }
+
+            async handleDayClick(e) {
+                const dayDiv = e.target.closest('.calendar-day');
+                if (!dayDiv || !dayDiv.dataset.date) return;
+                
+                const clickedDateStr = dayDiv.dataset.date;
+                const [year, month, day] = clickedDateStr.split('-').map(Number);
+                const clickedDate = new Date(year, month - 1, day);
+                const allData = this.scheduleManager.getAllData();
+                const { adminHolidays: currentAdminHolidays = [], userVacations = {} } = allData;
+                
+                if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
+                    if (clickedDate.getDay() === 4) return this.uiManager.showToast("星期四是固定公休日，無法更改。");
+                    
+                    const newAdminHolidays = currentAdminHolidays.includes(clickedDateStr)
+                        ? currentAdminHolidays.filter(d => d !== clickedDateStr)
+                        : [...currentAdminHolidays, clickedDateStr];
+                    
+                    await this.scheduleManager.updateAdminHolidays(newAdminHolidays);
+                    this.uiManager.showToast(currentAdminHolidays.includes(clickedDateStr) ? `${clickedDateStr} 已取消公休。` : `${clickedDateStr} 已設定為公休日。`);
+                    return;
+                }
+                
+                if (clickedDate.getDay() === 4 || currentAdminHolidays.includes(clickedDateStr)) {
+                    return this.uiManager.showToast("此日為公休日，無法排班");
+                }
+                
+                const [yearFromStr, monthFromStr] = clickedDateStr.split('-');
+
+                if (this.FULLTIME_ROLES.includes(this.authManager.getCurrentUserData().role)) {
+                    await this.handleFullTimeDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations);
+                } else if (this.authManager.getCurrentUserData().role === this.PART_TIMER_ROLE) {
+                    await this.handlePartTimerDayClick(clickedDateStr, yearFromStr, monthFromStr);
+                }
+            }
+
+            async handleFullTimeDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations) {
+                const vacationKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                const currentVacations = userVacations[vacationKey] || [];
+                const isVacation = currentVacations.includes(clickedDateStr);
+                
+                let newVacations;
+
+                if (isVacation) {
+                    newVacations = currentVacations.filter(d => d !== clickedDateStr);
+                } else {
+                    if(currentVacations.length >= 4) return this.uiManager.showToast('本月休假已選滿4天');
+                    
+                    const allUsers = this.scheduleManager.getAllUsers();
+                    const otherFullTimers = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && this.FULLTIME_ROLES.includes(u.role));
+                    let isDayTaken = false;
+                    for (const otherUser of otherFullTimers) {
+                        const otherUserVacationKey = `${otherUser.id}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                        const otherUserVacations = userVacations[otherUserVacationKey] || [];
+                        if (otherUserVacations.includes(clickedDateStr)) {
+                            isDayTaken = true;
+                            break;
+                        }
+                    }
+
+                    if (isDayTaken) {
+                        return this.uiManager.showToast(`已有其他正職人員於此日排休，無法選擇。`);
+                    }
+                    
+                    newVacations = [...currentVacations, clickedDateStr];
+                }
+                
+                await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
+            }
+
+            async handlePartTimerDayClick(clickedDateStr, yearFromStr, monthFromStr) {
+                const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                const allData = this.scheduleManager.getAllData();
+                const currentAvailability = allData.userAvailability?.[availabilityKey] || [];
+                const newAvailability = currentAvailability.includes(clickedDateStr)
+                    ? currentAvailability.filter(d => d !== clickedDateStr)
+                    : [...currentAvailability, clickedDateStr];
+                    
+                await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newAvailability);
+            }
+
+            async handleCoverShiftAction(e) {
+                const button = e.target;
+                const shiftId = button.dataset.id;
+                const allData = this.scheduleManager.getAllData();
+                const { coverSignups: currentCoverSignups = {} } = allData;
+                
+                if (button.classList.contains('signup-cover-btn')) {
+                    if (currentCoverSignups[shiftId]) return this.uiManager.showToast('此班次已被預約！');
+                    
+                    await this.scheduleManager.updateCoverSignups({ ...currentCoverSignups, [shiftId]: this.authManager.getCurrentUser().uid });
+                    this.uiManager.showToast('成功預約代班！');
+                } else if (button.classList.contains('cancel-cover-btn')) {
+                    if (currentCoverSignups[shiftId] === this.authManager.getCurrentUser().uid) {
+                        const newCoverSignups = { ...currentCoverSignups };
+                        delete newCoverSignups[shiftId];
+                        await this.scheduleManager.updateCoverSignups(newCoverSignups);
+                        this.uiManager.showToast('已取消代班。');
+                    }
+                }
+                
+                // 重新渲染視圖以更新UI狀態
+                this.renderAppView();
+            }
+
+            async handleManualAssignment(e) {
+                e.preventDefault();
+                const form = document.getElementById('manual-assignment-form');
+                const date = form.querySelector('#assignment-date').value;
+                const username = form.querySelector('#assignment-user').value.trim();
+                const assignedShift = form.querySelector('#assignment-role').value;
+
+                if (!date || !username || !assignedShift) return this.uiManager.showToast('所有欄位皆為必填。');
+
+                const allData = this.scheduleManager.getAllData();
+                const { manualAssignments = {} } = allData;
+                const dayAssignments = manualAssignments[date] || [];
+                
+                const newAssignment = { username, assignedShift };
+
+                const newDayAssignments = dayAssignments.filter(a => a.username !== username); 
+                newDayAssignments.push(newAssignment);
+
+                const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
+
+                await this.scheduleManager.updateManualAssignments(newManualAssignments);
+                this.uiManager.showToast('手動排班已新增！');
+                form.reset();
+            }
+
+            async handleDeleteManualAssignment(dateString, username) {
+                const allData = this.scheduleManager.getAllData();
+                const { manualAssignments = {} } = allData;
+                if (!manualAssignments[dateString]) return;
+
+                const updatedDayAssignments = (manualAssignments[dateString] || []).filter(a => a.username !== username);
+
+                const newManualAssignments = { ...manualAssignments };
+
+                if (updatedDayAssignments.length > 0) {
+                    newManualAssignments[dateString] = updatedDayAssignments;
+                } else {
+                    delete newManualAssignments[dateString];
+                }
+
+                await this.scheduleManager.updateManualAssignments(newManualAssignments);
+                this.uiManager.showToast('手動排班已刪除！');
+            }
+
+            renderAppView() {
+                const currentUserData = this.authManager.getCurrentUserData();
+                if(!currentUserData) return;
+                
+                if (currentUserData.role !== this.ADMIN_ROLE) {
+                    this.uiManager.toggleSettingsButton(true);
+                } else {
+                    this.uiManager.toggleSettingsButton(false);
+                }
+
+                if (this.FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === this.ADMIN_ROLE) {
+                    this.uiManager.showCalendarView();
+                    this.uiManager.updateAppSubtitle(currentUserData.role === this.ADMIN_ROLE ? "團隊排班總覽" : "請在下方月曆選擇您的休假日。");
+                    this.renderFullTimeView();
+                } else if (currentUserData.role === this.PART_TIMER_ROLE) {
+                    this.uiManager.showCalendarView();
+                    this.uiManager.updateAppSubtitle("請從左方列表選擇您要代班的時段。");
+                    this.renderPartTimerView();
+                }
+            }
+
+            async renderPartTimerView() {
+                const month = this.calendarManager.getMonth();
+                const year = this.calendarManager.getYear();
+                const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, adminHolidays = [], coverSignups = {} } = allData;
                 
                 let availableCoverShifts = [];
-                const fullTimeUsers = allUsers.filter(u => FULLTIME_ROLES.includes(u.role));
+                const allUsers = this.scheduleManager.getAllUsers();
+                const fullTimeUsers = allUsers.filter(u => this.FULLTIME_ROLES.includes(u.role));
                 
                 fullTimeUsers.forEach(user => {
                     const vacationKey = `${user.id}-${year}-${month+1}`;
@@ -418,7 +949,7 @@
                     return new Date(a.date) - new Date(b.date);
                 });
 
-                calendarView.innerHTML = `
+                this.uiManager.calendarView.innerHTML = `
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
                         <div id="cover-shifts-panel" class="md:col-span-1 bg-gray-50 p-2 sm:p-4 rounded-lg h-fit">
                             <h3 class="font-bold text-lg mb-4 text-center">可代班列表</h3>
@@ -440,12 +971,11 @@
                 `;
 
                 const coverShiftsList = document.getElementById('cover-shifts-list');
-                coverShiftsList.innerHTML = ''; // 清空舊的列表內容
                 if (availableCoverShifts.length === 0) {
                     coverShiftsList.innerHTML = `<p class="text-center text-gray-500 p-4">本月尚無代班需求。</p>`;
                 } else {
                     availableCoverShifts.forEach(shift => {
-                        const isSignedUpByCurrentUser = coverSignups[shift.id] === currentUser.uid;
+                        const isSignedUpByCurrentUser = coverSignups[shift.id] === this.authManager.getCurrentUser().uid;
                         const isTakenByOther = coverSignups[shift.id] && !isSignedUpByCurrentUser;
                         const card = document.createElement('div');
                         card.className = 'bg-white p-3 rounded-md shadow-sm border-l-4';
@@ -475,11 +1005,11 @@
                     });
                 }
                 
-                await renderFullCalendar();
+                await this.renderFullCalendar();
             }
             
-            async function renderFullTimeView() {
-                calendarView.innerHTML = `
+            async renderFullTimeView() {
+                this.uiManager.calendarView.innerHTML = `
                     <div>
                         <div id="calendar-header" class="flex items-center justify-between mb-4">
                             <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_left</span></button>
@@ -493,10 +1023,10 @@
                         <p class="text-center text-sm text-gray-500 mt-4"></p>
                     </div>
                 `;
-                 const instructions = calendarView.querySelector('p');
-                if (currentUserData.role === ADMIN_ROLE) {
+                 const instructions = this.uiManager.calendarView.querySelector('p');
+                if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
                     instructions.textContent = "點擊日期以設定或取消該日為全體公休日。";
-                    calendarView.insertAdjacentHTML('beforeend', `
+                    this.uiManager.calendarView.insertAdjacentHTML('beforeend', `
                         <div id="admin-assignment-panel" class="mt-8 p-4 sm:p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
                             <h3 class="text-lg font-bold mb-4 text-indigo-800">手動新增排班</h3>
                             <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
@@ -520,17 +1050,18 @@
                 } else {
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
                 }
-                await renderFullCalendar();
+                await this.renderFullCalendar();
             }
 
-            async function renderFullCalendar() {
-                calendarDate.setDate(1);
-                const month = calendarDate.getMonth();
-                const year = calendarDate.getFullYear();
+            async renderFullCalendar() {
+                this.calendarManager.getCalendarDate().setDate(1);
+                const month = this.calendarManager.getMonth();
+                const year = this.calendarManager.getYear();
                 
                 document.getElementById('calendar-month-year').textContent = `${year}年 ${month + 1}月`;
                 
-                const holidays = await fetchHolidays(year);
+                const holidays = await this.calendarManager.fetchHolidays(year);
+                const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
 
                 const dailySchedule = {};
@@ -541,7 +1072,8 @@
                     dailySchedule[dateString] = [];
                 }
 
-                allUsers.filter(u => FULLTIME_ROLES.includes(u.role)).forEach(user => {
+                const allUsers = this.scheduleManager.getAllUsers();
+                allUsers.filter(u => this.FULLTIME_ROLES.includes(u.role)).forEach(user => {
                     const userMonthKey = `${user.id}-${year}-${month+1}`;
                     const monthlyVacations = userVacations[userMonthKey] || [];
                     for (let i = 1; i <= lastDayOfMonth; i++) {
@@ -571,7 +1103,7 @@
                     }
                 });
                 
-                allUsers.filter(u => u.role === PART_TIMER_ROLE).forEach(user => {
+                allUsers.filter(u => u.role === this.PART_TIMER_ROLE).forEach(user => {
                     const userMonthKey = `${user.id}-${year}-${month+1}`;
                     const monthlyAvailability = userAvailability[userMonthKey] || [];
                     monthlyAvailability.forEach(dateString => {
@@ -616,7 +1148,7 @@
 
                 const calendarGrid = document.getElementById('calendar-grid');
                 calendarGrid.innerHTML = '';
-                const firstDayIndex = calendarDate.getDay();
+                const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
                 const prevLastDay = new Date(year, month, 0).getDate();
                 for (let i = firstDayIndex; i > 0; i--) {
                     calendarGrid.innerHTML += `<div class="p-1 sm:p-2 text-center text-gray-300 no-hover">${prevLastDay - i + 1}</div>`;
@@ -637,11 +1169,11 @@
                     if (isThursday || isAdminHoliday) {
                         day.classList.add('bg-red-100');
                         day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800">${i}</span></div><div class="flex-grow flex items-center justify-center"><p class="font-bold text-red-700 text-xs sm:text-sm">公休日</p></div>`;
-                        if (currentUserData.role === ADMIN_ROLE && !isThursday) day.classList.add('cursor-pointer'); 
+                        if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE && !isThursday) day.classList.add('cursor-pointer'); 
                     } else {
                         if(holidayName) day.classList.add('bg-yellow-100');
                         
-                        if (FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === PART_TIMER_ROLE || currentUserData.role === ADMIN_ROLE) {
+                        if (this.FULLTIME_ROLES.includes(this.authManager.getCurrentUserData().role) || this.authManager.getCurrentUserData().role === this.PART_TIMER_ROLE || this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
                             day.classList.add('cursor-pointer');
                         }
 
@@ -658,7 +1190,7 @@
                                     if (isCover) return timeSlot === 'AM' ? 4 : 5; // 早炸, 晚炸
                                     return 6; // 炸
                                 }
-                                if (role === PART_TIMER_ROLE) {
+                                if (role === this.PART_TIMER_ROLE) {
                                     return 7; // 收
                                 }
                                 return 99;
@@ -671,9 +1203,9 @@
                                 let colorClass = '';
                                 
                                 const originalUser = allUsers.find(u => u.username === username);
-                                const userRole = originalUser ? originalUser.role : (role === PART_TIMER_ROLE ? PART_TIMER_ROLE : null);
+                                const userRole = originalUser ? originalUser.role : (role === this.PART_TIMER_ROLE ? this.PART_TIMER_ROLE : null);
 
-                                if (userRole === PART_TIMER_ROLE || isManual) {
+                                if (userRole === this.PART_TIMER_ROLE || isManual) {
                                     if (isCover) { 
                                         if (role === '内場備菜班') {
                                             displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
@@ -699,7 +1231,7 @@
                                     }
                                 }
                                 
-                                const deleteButtonHtml = (currentUserData.role === ADMIN_ROLE && isManual)
+                                const deleteButtonHtml = (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE && isManual)
                                     ? `<button data-date="${dateString}" data-username="${username}" class="delete-manual-assignment-btn text-red-400 hover:text-red-700 font-bold">&times;</button>`
                                     : '';
 
@@ -713,10 +1245,10 @@
                         }
                         
                         let selfStatusHtml = '';
-                        if (currentUserData.role === ADMIN_ROLE) {
+                        if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
                             if(!holidayName) day.classList.add('bg-gray-50');
-                        } else if (FULLTIME_ROLES.includes(currentUserData.role)) {
-                            const vacationKey = `${currentUser.uid}-${year}-${month+1}`;
+                        } else if (this.FULLTIME_ROLES.includes(this.authManager.getCurrentUserData().role)) {
+                            const vacationKey = `${this.authManager.getCurrentUser().uid}-${year}-${month+1}`;
                             const isVacation = (userVacations[vacationKey] || []).includes(dateString);
                             if (isVacation) {
                                 day.classList.add('bg-red-100', 'border', 'border-red-400');
@@ -726,10 +1258,10 @@
                                 day.classList.add('border', 'border-green-400');
                                 selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
-                        } else if (currentUserData.role === PART_TIMER_ROLE) {
-                            const availabilityKey = `${currentUser.uid}-${year}-${month+1}`;
+                        } else if (this.authManager.getCurrentUserData().role === this.PART_TIMER_ROLE) {
+                            const availabilityKey = `${this.authManager.getCurrentUser().uid}-${year}-${month+1}`;
                             const isAvailable = (userAvailability[availabilityKey] || []).includes(dateString);
-                            const isWorkingCoverShift = workingUsers.some(w => w.username === currentUserData.username && w.isCover);
+                            const isWorkingCoverShift = workingUsers.some(w => w.username === this.authManager.getCurrentUserData().username && w.isCover);
 
                             if (isAvailable) {
                                 if(!holidayName) day.classList.add('bg-blue-100');
@@ -744,438 +1276,111 @@
                             }
                         }
 
-                        let geminiButtonHtml = '';
-                        if (currentUserData.role === ADMIN_ROLE && workingUsers.length > 0) {
-                            geminiButtonHtml = `<button data-date="${dateString}" class="gemini-btn text-xs text-indigo-500 hover:underline">✨ AI 建議</button>`;
-                        }
 
-                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}${geminiButtonHtml}`;
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
                     calendarGrid.appendChild(day);
                 }
             }
-            
-            async function handleDayClick(e) {
-                const dayDiv = e.target.closest('.calendar-day');
-                if (!dayDiv || !dayDiv.dataset.date) return;
-                
-                const clickedDateStr = dayDiv.dataset.date;
-                const [year, month, day] = clickedDateStr.split('-').map(Number);
-                const clickedDate = new Date(year, month - 1, day);
-                const { adminHolidays: currentAdminHolidays = [], userVacations = {} } = allData;
-                
-                if (currentUserData.role === ADMIN_ROLE) {
-                    if (clickedDate.getDay() === 4) return showToast("星期四是固定公休日，無法更改。");
-                    
-                    const newAdminHolidays = currentAdminHolidays.includes(clickedDateStr)
-                        ? currentAdminHolidays.filter(d => d !== clickedDateStr)
-                        : [...currentAdminHolidays, clickedDateStr];
-                    
-                    await setDoc(doc(db, "scheduleData", "main"), { adminHolidays: newAdminHolidays }, { merge: true });
-                    showToast(currentAdminHolidays.includes(clickedDateStr) ? `${clickedDateStr} 已取消公休。` : `${clickedDateStr} 已設定為公休日。`);
-                    return;
-                }
-                
-                if (clickedDate.getDay() === 4 || currentAdminHolidays.includes(clickedDateStr)) {
-                    return showToast("此日為公休日，無法排班");
-                }
-                
-                const [yearFromStr, monthFromStr] = clickedDateStr.split('-');
 
-                if (FULLTIME_ROLES.includes(currentUserData.role)) {
-                    const vacationKey = `${currentUser.uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
-                    const currentVacations = userVacations[vacationKey] || [];
-                    const isVacation = currentVacations.includes(clickedDateStr);
-                    
-                    let newVacations;
-
-                    if (isVacation) {
-                        newVacations = currentVacations.filter(d => d !== clickedDateStr);
-                    } else {
-                        if(currentVacations.length >= 4) return showToast('本月休假已選滿4天');
-                        
-                        const otherFullTimers = allUsers.filter(u => u.id !== currentUser.uid && FULLTIME_ROLES.includes(u.role));
-                        let isDayTaken = false;
-                        for (const otherUser of otherFullTimers) {
-                            const otherUserVacationKey = `${otherUser.id}-${yearFromStr}-${parseInt(monthFromStr)}`;
-                            const otherUserVacations = userVacations[otherUserVacationKey] || [];
-                            if (otherUserVacations.includes(clickedDateStr)) {
-                                isDayTaken = true;
-                                break;
-                            }
-                        }
-
-                        if (isDayTaken) {
-                            return showToast(`已有其他正職人員於此日排休，無法選擇。`);
-                        }
-                        
-                        newVacations = [...currentVacations, clickedDateStr];
-                    }
-                    
-                    await setDoc(doc(db, "scheduleData", "main"), { userVacations: { ...userVacations, [vacationKey]: newVacations } }, { merge: true });
-
-                } else if (currentUserData.role === PART_TIMER_ROLE) {
-                    const availabilityKey = `${currentUser.uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
-                    const currentAvailability = allData.userAvailability?.[availabilityKey] || [];
-                    const newAvailability = currentAvailability.includes(clickedDateStr)
-                        ? currentAvailability.filter(d => d !== clickedDateStr)
-                        : [...currentAvailability, clickedDateStr];
-                        
-                    await setDoc(doc(db, "scheduleData", "main"), { userAvailability: { ...allData.userAvailability, [availabilityKey]: newAvailability } }, { merge: true });
-                }
-            }
-
-            async function handleCoverShiftAction(e) {
-                const button = e.target;
-                const shiftId = button.dataset.id;
-                const { coverSignups: currentCoverSignups = {} } = allData;
-                
-                if (button.classList.contains('signup-cover-btn')) {
-                    if (currentCoverSignups[shiftId]) return showToast('此班次已被預約！');
-                    
-                    await setDoc(doc(db, "scheduleData", "main"), { coverSignups: { ...currentCoverSignups, [shiftId]: currentUser.uid } }, { merge: true });
-                    showToast('成功預約代班！');
-                } else if (button.classList.contains('cancel-cover-btn')) {
-                    if (currentCoverSignups[shiftId] === currentUser.uid) {
-                        const newCoverSignups = { ...currentCoverSignups };
-                        delete newCoverSignups[shiftId];
-                        await setDoc(doc(db, "scheduleData", "main"), { coverSignups: newCoverSignups }, { merge: true });
-                        showToast("已取消代班。");
-
-                        // 強制重新獲取最新數據
-                        const docRef = doc(db, "scheduleData", "main");
-                        const snapshot = await getDoc(docRef);
-                        if (snapshot.exists()) {
-                            allData.coverSignups = snapshot.data().coverSignups || {};
-                        }
-                        
-                        // 重新渲染
-                        renderPartTimerView();
-                    }
-                }
-            }
-
-            async function handleManualAssignment(e) {
-                e.preventDefault();
-                const form = document.getElementById('manual-assignment-form');
-                const date = form.querySelector('#assignment-date').value;
-                const username = form.querySelector('#assignment-user').value.trim();
-                const assignedShift = form.querySelector('#assignment-role').value;
-
-                if (!date || !username || !assignedShift) return showToast('所有欄位皆為必填。');
-
-                const { manualAssignments = {} } = allData;
-                const dayAssignments = manualAssignments[date] || [];
-                
-                const newAssignment = { username, assignedShift };
-
-                const newDayAssignments = dayAssignments.filter(a => a.username !== username); 
-                newDayAssignments.push(newAssignment);
-
-                const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
-
-                await setDoc(doc(db, "scheduleData", "main"), { manualAssignments: newManualAssignments }, { merge: true });
-                showToast('手動排班已新增！');
-                form.reset();
-            }
-
-            async function handleDeleteManualAssignment(dateString, username) {
-                const { manualAssignments = {} } = allData;
-                if (!manualAssignments[dateString]) return;
-
-                const updatedDayAssignments = (manualAssignments[dateString] || []).filter(a => a.username !== username);
-
-                const newManualAssignments = { ...manualAssignments };
-
-                if (updatedDayAssignments.length > 0) {
-                    newManualAssignments[dateString] = updatedDayAssignments;
-                } else {
-                    delete newManualAssignments[dateString];
-                }
-
-                await setDoc(doc(db, "scheduleData", "main"), { manualAssignments: newManualAssignments }, { merge: true });
-                showToast('手動排班已刪除！');
-            }
-
-            // --- Gemini AI ---
-            async function getGeminiTaskSuggestion(date, workingUsers) {
-                geminiTaskModal.classList.remove('hidden');
-                geminiTaskContent.innerHTML = '<p class="text-center">✨ AI 正在為您產生建議...</p>';
-
-                const userRoles = workingUsers.map(u => {
-                    const originalUser = allUsers.find(au => au.username === u.username);
-                    return `${u.username} (${originalUser ? originalUser.role : '未知'})`;
-                }).join(', ');
-
-                const prompt = `
-                    這是一個餐廳內場的排班表。今天是 ${date}，上班的人員與職位有：${userRoles}。
-                    請根據這些人員的角色，為他們每個人建議一項今天可以執行的'特別任務'，讓餐廳營運更順暢。
-                    任務需要符合他們的職位，例如備菜班可以檢查庫存，炸爐班可以清潔設備，工讀生可以補充耗材。
-                    請用繁體中文，以條列式清單格式呈現，每項任務一行，格式為："【人員姓名】: 建議任務內容"。
-                `;
-
-                try {
-                    const apiKey = "";
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
-                    const payload = {
-                        contents: [{ parts: [{ text: prompt }] }],
-                    };
-                    
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-
-                    const result = await response.json();
-                    const text = result.candidates[0].content.parts[0].text;
-                    
-                    // Format the response into a nice list
-                    const formattedText = text.replace(/【/g, '<div class="mt-4"><strong class="text-indigo-600">').replace(/】/g, '</strong>').replace(/:/g, '：').replace(/\n/g, '</div>');
-                    geminiTaskContent.innerHTML = formattedText;
-
-                } catch (error) {
-                    console.error('Error with Gemini API:', error);
-                    geminiTaskContent.innerHTML = '<p class="text-red-500 text-center">無法取得 AI 建議，請稍後再試。</p>';
-                }
-            }
-
-
-            // --- Auth Logic ---
-            async function handleRegister(e) {
-                e.preventDefault();
-                authError.textContent = '';
-                const username = registerForm.querySelector('#register-username').value.trim();
-                const password = registerForm.querySelector('#register-password').value;
-                const passwordConfirm = registerForm.querySelector('#register-password-confirm').value;
-                const role = registerForm.querySelector('#register-role').value;
-                
-                if (!username || !password || !role || !passwordConfirm) return authError.textContent = '所有欄位皆為必填。';
-                if (password.length < 6) return authError.textContent = '密碼長度至少需要6位數。';
-                if (password !== passwordConfirm) return authError.textContent = '兩次輸入的密碼不一致。';
-                
-                const q = query(collection(db, "users"), where("username_lowercase", "==", username.toLowerCase()));
-                const querySnapshot = await getDocs(q);
-                if (!querySnapshot.empty) return authError.textContent = '此用戶名稱已被使用。';
-                
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, `${username.toLowerCase()}@schedule-app.com`, password);
-                    const user = userCredential.user;
-                    await setDoc(doc(db, "users", user.uid), {
-                        username: username,
-                        username_lowercase: username.toLowerCase(),
-                        role: role
-                    });
-                } catch (error) {
-                    console.error("Register error:", error);
-                    authError.textContent = "註冊失敗，請稍後再試。";
-                }
-            }
-
-            async function handleLogin(e) {
-                e.preventDefault();
-                authError.textContent = '';
-                const username = loginForm.querySelector('#login-username').value.trim().toLowerCase();
-                const password = loginForm.querySelector('#login-password').value;
-                
-                try {
-                    await signInWithEmailAndPassword(auth, `${username}@schedule-app.com`, password);
-                } catch (error) {
-                    console.error("Login error:", error);
-                    authError.textContent = "用戶名稱或密碼錯誤。";
-                }
-            }
-
-            function handleLogout() {
-                signOut(auth);
-            }
-            
-            async function handleChangePassword(e) {
-                e.preventDefault();
-                passwordSettingsError.textContent = '';
-                const newPassword = changePasswordForm.querySelector('#new-password').value;
-                const confirmNewPassword = changePasswordForm.querySelector('#confirm-new-password').value;
-
-                if (newPassword.length < 6) {
-                    return passwordSettingsError.textContent = '新密碼長度至少需要6位數。';
-                }
-                if (newPassword !== confirmNewPassword) {
-                    return passwordSettingsError.textContent = '兩次輸入的新密碼不一致。';
-                }
-
-                try {
-                    await updatePassword(currentUser, newPassword);
-                    showToast('密碼更新成功！');
-                    settingsModal.classList.add('hidden');
-                    changePasswordForm.reset();
-                } catch (error) {
-                    console.error("Password change error:", error);
-                    passwordSettingsError.textContent = '密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。';
-                }
-            }
-
-            async function handleChangeUsername(e) {
-                e.preventDefault();
-                usernameSettingsError.textContent = '';
-                const newUsernameInput = changeUsernameForm.querySelector('#new-username');
-                const newUsername = newUsernameInput.value.trim();
-
-                if (!newUsername) {
-                    return usernameSettingsError.textContent = '姓名不能為空。';
-                }
-                if (newUsername === currentUserData.username) {
-                    return usernameSettingsError.textContent = '新舊名稱相同。';
-                }
-
-                const q = query(collection(db, "users"), where("username_lowercase", "==", newUsername.toLowerCase()));
-                const querySnapshot = await getDocs(q);
-                
-                let isTaken = false;
-                querySnapshot.forEach(doc => {
-                    if (doc.id !== currentUser.uid) {
-                        isTaken = true;
-                    }
+            setupEventListeners() {
+                this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
+                    e.preventDefault(); 
+                    this.uiManager.showRegisterForm(); 
                 });
-
-                if (isTaken) {
-                    return usernameSettingsError.textContent = '此名稱已被其他使用者占用。';
-                }
-
-                try {
-                    const userDocRef = doc(db, "users", currentUser.uid);
-                    await setDoc(userDocRef, {
-                        username: newUsername,
-                        username_lowercase: newUsername.toLowerCase()
-                    }, { merge: true });
-                    
-                    showToast('名稱更新成功！');
-                    settingsModal.classList.add('hidden');
-                } catch (error) {
-                    console.error("Username change error:", error);
-                    usernameSettingsError.textContent = '名稱更新失敗，請稍後再試。';
-                }
-            }
-            
-            function renderAppView() {
-                if(!currentUserData) return;
+                this.uiManager.showLoginBtn.addEventListener('click', (e) => { 
+                    e.preventDefault(); 
+                    this.uiManager.showLoginForm(); 
+                });
                 
-                if (currentUserData.role !== ADMIN_ROLE) {
-                    settingsBtn.classList.remove('hidden');
-                } else {
-                    settingsBtn.classList.add('hidden');
-                }
+                this.uiManager.registerForm.addEventListener('submit', (e) => this.handleRegister(e));
+                this.uiManager.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+                this.uiManager.logoutBtn.addEventListener('click', () => this.handleLogout());
 
-                if (FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === ADMIN_ROLE) {
-                    calendarView.classList.remove('hidden');
-                    appSubtitle.textContent = currentUserData.role === ADMIN_ROLE ? "團隊排班總覽" : "請在下方月曆選擇您的休假日。";
-                    renderFullTimeView();
-                } else if (currentUserData.role === PART_TIMER_ROLE) {
-                    calendarView.classList.remove('hidden');
-                    appSubtitle.textContent = "請從左方列表選擇您要代班的時段。";
-                    renderPartTimerView();
-                }
-            }
-            
-            // --- Initialization ---
-            onAuthStateChanged(auth, async (user) => {
-                cleanupListeners();
-                if (user) {
-                    currentUser = user;
-                    const userDocRef = doc(db, "users", user.uid);
-                    const userDocSnap = await getDoc(userDocRef);
-                    
-                    if (userDocSnap.exists()) {
-                        currentUserData = { uid: user.uid, ...userDocSnap.data() };
-                        userNameSpan.textContent = currentUserData.username;
-                        userRoleSpan.textContent = currentUserData.role;
-                        
-                        authContainer.classList.add('hidden');
-                        appContainer.classList.remove('hidden');
-                        
-                        setupRealtimeListeners(); // This will trigger the first render
-                    } else {
-                        // This case is unlikely but good for safety
-                        console.error("User data not found in Firestore!");
-                        handleLogout();
-                    }
-                } else {
-                    currentUser = null;
-                    currentUserData = null;
-                    authContainer.classList.remove('hidden');
-                    appContainer.classList.add('hidden');
-                }
-            });
-
-            function setupEventListeners() {
-                showRegisterBtn.addEventListener('click', (e) => { e.preventDefault(); loginView.classList.add('hidden'); registerView.classList.remove('hidden'); authError.textContent=''; });
-                showLoginBtn.addEventListener('click', (e) => { e.preventDefault(); registerView.classList.add('hidden'); loginView.classList.remove('hidden'); authError.textContent=''; });
-                
-                registerForm.addEventListener('submit', handleRegister);
-                loginForm.addEventListener('submit', handleLogin);
-                logoutBtn.addEventListener('click', handleLogout);
-
-                settingsBtn.addEventListener('click', () => {
-                    settingsModal.classList.remove('hidden');
-                    passwordSettingsError.textContent = '';
-                    usernameSettingsError.textContent = '';
-                    changePasswordForm.reset();
+                this.uiManager.settingsBtn.addEventListener('click', () => {
+                    this.uiManager.showSettingsModal();
                     const newUsernameInput = document.getElementById('new-username');
-                    if(newUsernameInput && currentUserData) newUsernameInput.value = currentUserData.username;
+                    if(newUsernameInput && this.authManager.getCurrentUserData()) {
+                        newUsernameInput.value = this.authManager.getCurrentUserData().username;
+                    }
                 });
-                closeSettingsBtn.addEventListener('click', () => {
-                    settingsModal.classList.add('hidden');
+                this.uiManager.closeSettingsBtn.addEventListener('click', () => {
+                    this.uiManager.hideSettingsModal();
                 });
-                changePasswordForm.addEventListener('submit', handleChangePassword);
-                changeUsernameForm.addEventListener('submit', handleChangeUsername);
-                closeGeminiTaskBtn.addEventListener('click', () => {
-                    geminiTaskModal.classList.add('hidden');
-                });
+                this.uiManager.changePasswordForm.addEventListener('submit', (e) => this.handleChangePassword(e));
+                this.uiManager.changeUsernameForm.addEventListener('submit', (e) => this.handleChangeUsername(e));
 
-
-                calendarView.addEventListener('click', async (e) => {
+                this.uiManager.calendarView.addEventListener('click', async (e) => {
                     if (e.target.closest('#prev-month-btn')) {
-                        calendarDate.setMonth(calendarDate.getMonth() - 1);
-                        renderAppView();
+                        this.calendarManager.previousMonth();
+                        this.renderAppView();
                     }
                     if (e.target.closest('#next-month-btn')) {
-                        calendarDate.setMonth(calendarDate.getMonth() + 1);
-                        renderAppView();
+                        this.calendarManager.nextMonth();
+                        this.renderAppView();
                     }
-                    if (e.target.closest('.gemini-btn')) {
-                        e.stopPropagation();
-                        const btn = e.target.closest('.gemini-btn');
-                        const date = btn.dataset.date;
-                        const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
-                        const workingUsers = (dailySchedule[date] || []);
-                        getGeminiTaskSuggestion(date, workingUsers);
-                    }
-                    else if (e.target.closest('.calendar-day')) {
-                        await handleDayClick(e);
+                    if (e.target.closest('.calendar-day')) {
+                        await this.handleDayClick(e);
                     }
                     if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
-                        await handleCoverShiftAction(e);
+                        await this.handleCoverShiftAction(e);
                     }
                     if (e.target.closest('.delete-manual-assignment-btn')) {
                         e.stopPropagation();
                         const btn = e.target.closest('.delete-manual-assignment-btn');
-                        await handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
+                        await this.handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
                     }
                 });
-                calendarView.addEventListener('submit', async (e) => {
+                this.uiManager.calendarView.addEventListener('submit', async (e) => {
                     if (e.target.id === 'manual-assignment-form') {
-                       await handleManualAssignment(e);
+                       await this.handleManualAssignment(e);
                     }
                 });
             }
-            
-            setupEventListeners();
+
+            setupAuthStateListener() {
+                onAuthStateChanged(this.auth, async (user) => {
+                    this.scheduleManager.cleanupListeners();
+                    if (user) {
+                        this.authManager.setCurrentUser(user);
+                        const userData = await this.authManager.getUserData(user);
+                        
+                        if (userData) {
+                            this.authManager.setCurrentUserData(userData);
+                            this.uiManager.updateUserInfo(userData.username, userData.role);
+                            
+                            this.uiManager.showAppView();
+                            
+                            // 設置資料變更回調
+                            this.scheduleManager.setOnDataChangeCallback(() => {
+                                this.renderAppView();
+                            });
+                            
+                            this.scheduleManager.setupRealtimeListeners();
+                            // 初始渲染
+                            this.renderAppView();
+                        } else {
+                            console.error("User data not found in Firestore!");
+                            this.handleLogout();
+                        }
+                    } else {
+                        this.authManager.setCurrentUser(null);
+                        this.authManager.setCurrentUserData(null);
+                        this.uiManager.showAuthView();
+                    }
+                });
+            }
+        }
+
+        // ===================================================================================
+        // === 初始化應用程式 ===
+        // ===================================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            new ScheduleApp();
         });
+
     </script>
 </body>
 </html>
