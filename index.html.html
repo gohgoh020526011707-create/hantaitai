@@ -834,6 +834,10 @@
             }
 
             async handleCoverShiftAction(e) {
+                // 防止預設行為和事件冒泡
+                e.preventDefault();
+                e.stopPropagation();
+                
                 const button = e.target;
                 const shiftId = button.dataset.id;
                 const allData = this.scheduleManager.getAllData();
@@ -869,8 +873,8 @@
                     }
                 }
                 
-                // 重新渲染視圖以更新UI狀態
-                this.renderAppView();
+                // 不需要重新渲染整個視圖，即時監聽器會自動更新UI
+                // this.renderAppView(); // 移除這行以避免頁面跳轉
             }
 
             async handleManualAssignment(e) {
@@ -1314,14 +1318,14 @@
                     calendarGrid.appendChild(day);
                 }
             }
-
+            
             setupEventListeners() {
                 this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
-                    e.preventDefault(); 
+                e.preventDefault();
                     this.uiManager.showRegisterForm(); 
                 });
                 this.uiManager.showLoginBtn.addEventListener('click', (e) => { 
-                    e.preventDefault(); 
+                e.preventDefault();
                     this.uiManager.showLoginForm(); 
                 });
                 
@@ -1373,7 +1377,7 @@
             setupAuthStateListener() {
                 onAuthStateChanged(this.auth, async (user) => {
                     this.scheduleManager.cleanupListeners();
-                    if (user) {
+                if (user) {
                         this.authManager.setCurrentUser(user);
                         const userData = await this.authManager.getUserData(user);
                         
@@ -1391,11 +1395,11 @@
                             this.scheduleManager.setupRealtimeListeners();
                             // 初始渲染
                             this.renderAppView();
-                        } else {
-                            console.error("User data not found in Firestore!");
-                            this.handleLogout();
-                        }
                     } else {
+                        console.error("User data not found in Firestore!");
+                            this.handleLogout();
+                    }
+                } else {
                         this.authManager.setCurrentUser(null);
                         this.authManager.setCurrentUserData(null);
                         this.uiManager.showAuthView();
