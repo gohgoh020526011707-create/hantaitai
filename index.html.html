@@ -947,8 +947,8 @@
                 
                 const newAssignment = { username, assignedShift };
 
-                const newDayAssignments = dayAssignments.filter(a => a.username !== username); 
-                newDayAssignments.push(newAssignment);
+                // 直接加入新的排班，不限制同一天同一人的排班數量
+                const newDayAssignments = [...dayAssignments, newAssignment];
 
                 const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
 
@@ -1019,11 +1019,18 @@
                 let newCoverSignups = { ...currentCoverSignups };
 
                 if (targetUser) {
+                    console.log(`找到目標使用者: ${targetUser.username} (${targetUser.role})`);
+                    
                     if (targetUser.role === this.PART_TIMER_ROLE) {
                         // 3a) 若為工讀生：移除當日可上班與代班預約
+                        console.log('處理工讀生數據清理...');
                         const availabilityKey = `${targetUser.id}-${year}-${month}`;
                         const currentAvail = newUserAvailability[availabilityKey] || [];
+                        console.log(`工讀生 ${dateString} 可上班記錄:`, currentAvail);
+                        
                         const filteredAvail = currentAvail.filter(d => d !== dateString);
+                        console.log(`過濾後的可上班記錄:`, filteredAvail);
+                        
                         if (filteredAvail.length > 0) {
                             newUserAvailability[availabilityKey] = filteredAvail;
                         } else {
@@ -1031,23 +1038,40 @@
                         }
 
                         // 移除該工讀生在此日期的代班報名
+                        console.log('檢查代班報名...');
+                        const coverKeysToDelete = [];
                         Object.keys(newCoverSignups).forEach(signupId => {
                             const parts = signupId.split('-');
                             if (parts.length >= 5) {
                                 const dateInId = parts.slice(parts.length - 4, parts.length - 1).join('-');
                                 if (dateInId === dateString && newCoverSignups[signupId] === targetUser.id) {
-                                    delete newCoverSignups[signupId];
+                                    console.log(`找到要刪除的代班報名: ${signupId}`);
+                                    coverKeysToDelete.push(signupId);
                                 }
                             }
                         });
+                        
+                        coverKeysToDelete.forEach(key => {
+                            delete newCoverSignups[key];
+                            console.log(`已刪除代班報名: ${key}`);
+                        });
+                        
                     } else if (this.FULLTIME_ROLES.includes(targetUser.role)) {
                         // 3b) 若為正職：將該日加入休假，避免自動顯示為上班
+                        console.log('處理正職數據清理...');
                         const vacationKey = `${targetUser.id}-${year}-${month}`;
                         const currentVac = newUserVacations[vacationKey] || [];
+                        console.log(`正職 ${dateString} 休假記錄:`, currentVac);
+                        
                         if (!currentVac.includes(dateString)) {
                             newUserVacations[vacationKey] = [...currentVac, dateString];
+                            console.log(`已將 ${dateString} 加入休假`);
+                        } else {
+                            console.log(`${dateString} 已在休假記錄中`);
                         }
                     }
+                } else {
+                    console.log('找不到目標使用者:', username);
                 }
 
                 // 4) 依需求：輸出取消前/後的代班資料到 console 方便除錯
@@ -1310,10 +1334,10 @@
                     if (dailySchedule[dateString]) {
                         const assignments = manualAssignments[dateString];
                         assignments.forEach(assignment => {
-                             // Remove any other assignment for this user on this day
-                            dailySchedule[dateString] = dailySchedule[dateString].filter(
-                                s => s.username !== assignment.username
-                            );
+                             // 不再移除該使用者的其他排班記錄，允許同一天多筆排班
+                            // dailySchedule[dateString] = dailySchedule[dateString].filter(
+                            //     s => s.username !== assignment.username
+                            // );
 
                             // Parse assignedShift to role and timeSlot
                             let role = '';
