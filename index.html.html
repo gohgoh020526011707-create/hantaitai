@@ -943,7 +943,13 @@
 
                 const allData = this.scheduleManager.getAllData();
                 const { manualAssignments = {} } = allData;
-                const dayAssignments = manualAssignments[date] || [];
+                // === START: 修改 ===
+                // 檢查抓到的資料是陣列還是物件，並統一轉換成陣列
+                const dayAssignmentsData = manualAssignments[date] || {};
+                const dayAssignments = Array.isArray(dayAssignmentsData) 
+                    ? dayAssignmentsData 
+                    : Object.values(dayAssignmentsData);
+                // === END: 修改 ===
                 
                 const newAssignment = { username, assignedShift };
 
@@ -980,10 +986,21 @@
                 }
 
                 // 1) 先找到該日期，再找到該人在該日期的具體班別，然後刪除
-                const dayAssignments = manualAssignments[dateString] || [];
-                const targetIndex = dayAssignments.findIndex(a => 
-                    a.username === username && a.assignedShift === assignedShift
-                );
+                // === START: 修改 ===
+                // 檢查抓到的資料是陣列還是物件，並統一轉換成陣列
+                const dayAssignmentsData = manualAssignments[dateString] || {};
+                const dayAssignments = Array.isArray(dayAssignmentsData) 
+                    ? dayAssignmentsData 
+                    : Object.values(dayAssignmentsData);
+                // === END: 修改 ===
+                console.log('該日期的所有排班記錄:', dayAssignments);
+                console.log('要匹配的條件:', { username, assignedShift });
+                
+                const targetIndex = dayAssignments.findIndex(a => {
+                    const matches = a.username === username && a.assignedShift === assignedShift;
+                    console.log('檢查記錄:', a, '是否匹配:', matches);
+                    return matches;
+                });
                 
                 if (targetIndex === -1) {
                     console.log('找不到匹配的排班記錄:', { dateString, username, assignedShift });
@@ -998,7 +1015,7 @@
                 updatedDayAssignments.splice(targetIndex, 1); // 刪除該位置的記錄
                 
                 if (updatedDayAssignments.length > 0) {
-                    newManualAssignments[dateString] = updatedDayAssignments;
+                    newManualAssignments[dateString] = JSON.parse(JSON.stringify(updatedDayAssignments));
                 } else {
                     delete newManualAssignments[dateString];
                 }
@@ -1010,7 +1027,10 @@
 
                 // 2) 找到此使用者（用名稱對應到 users 資料，取得 id 與 role）
                 const allUsers = this.scheduleManager.getAllUsers();
+                console.log('所有使用者列表:', allUsers);
+                console.log('要查找的使用者:', username);
                 const targetUser = allUsers.find(u => u.username === username);
+                console.log('找到的使用者:', targetUser);
 
                 // 3) 解析年月以更新對應 key
                 const [yearStr, monthStr] = dateString.split('-');
