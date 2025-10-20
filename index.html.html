@@ -564,6 +564,18 @@
             async updateManualAssignments(assignments) {
                 await setDoc(doc(this.db, "scheduleData", "main"), { manualAssignments: assignments }, { merge: true });
             }
+
+            async updateMultiple(fields) {
+                // 使用 merge:true 同步更新多個欄位，避免資料彼此覆蓋
+                console.log('updateMultiple 被呼叫，準備更新欄位:', fields);
+                try {
+                    await setDoc(doc(this.db, "scheduleData", "main"), fields, { merge: true });
+                    console.log('updateMultiple 更新成功');
+                } catch (error) {
+                    console.error('updateMultiple 更新失敗:', error);
+                    throw error;
+                }
+            }
         }
 
         // ===================================================================================
@@ -946,22 +958,125 @@
             }
 
             async handleDeleteManualAssignment(dateString, username) {
+                console.log('開始刪除手動排班:', { dateString, username });
+                
+                // 僅允許管理者執行刪除手動班次與相關清理
+                if (this.authManager.getCurrentUserData()?.role !== this.ADMIN_ROLE) {
+                    console.log('非管理者嘗試刪除，被拒絕');
+                    this.uiManager.showToast('僅管理者可刪除此班次。');
+                    return;
+                }
+
                 const allData = this.scheduleManager.getAllData();
-                const { manualAssignments = {} } = allData;
-                if (!manualAssignments[dateString]) return;
+                const { manualAssignments = {}, userAvailability = {}, userVacations = {}, coverSignups = {} } = allData;
+                
+                console.log('目前手動排班資料:', manualAssignments);
+                console.log('目標日期資料:', manualAssignments[dateString]);
+                
+                if (!manualAssignments[dateString]) {
+                    console.log('該日期沒有手動排班資料');
+                    this.uiManager.showToast('該日期沒有手動排班資料。');
+                    return;
+                }
 
-                const updatedDayAssignments = (manualAssignments[dateString] || []).filter(a => a.username !== username);
-
+                // 1) 先找到該日期，再找到該人在該日期的具體位置（如 0 行），然後刪除
+                const dayAssignments = manualAssignments[dateString] || [];
+                const targetIndex = dayAssignments.findIndex(a => a.username === username);
+                
+                if (targetIndex === -1) {
+                    this.uiManager.showToast('找不到該使用者的排班記錄。');
+                    return;
+                }
+                
                 const newManualAssignments = { ...manualAssignments };
-
+                const updatedDayAssignments = [...dayAssignments];
+                updatedDayAssignments.splice(targetIndex, 1); // 刪除該位置的記錄
+                
                 if (updatedDayAssignments.length > 0) {
                     newManualAssignments[dateString] = updatedDayAssignments;
                 } else {
                     delete newManualAssignments[dateString];
                 }
+                
+                console.log(`刪除 ${dateString} 日期中第 ${targetIndex} 行的 ${username} 排班記錄`);
+                console.log('刪除前的手動排班:', manualAssignments[dateString]);
+                console.log('刪除後的手動排班:', updatedDayAssignments);
+                console.log('新的手動排班物件:', newManualAssignments);
 
-                await this.scheduleManager.updateManualAssignments(newManualAssignments);
-                this.uiManager.showToast('手動排班已刪除！');
+                // 2) 找到此使用者（用名稱對應到 users 資料，取得 id 與 role）
+                const allUsers = this.scheduleManager.getAllUsers();
+                const targetUser = allUsers.find(u => u.username === username);
+
+                // 3) 解析年月以更新對應 key
+                const [yearStr, monthStr] = dateString.split('-');
+                const year = parseInt(yearStr, 10);
+                const month = parseInt(monthStr, 10); // 1-based
+
+                let newUserAvailability = { ...userAvailability };
+                let newUserVacations = { ...userVacations };
+                // 依需求：複製目前的代班資料，刪除相符紀錄，並記錄前後狀態
+                const currentCoverSignups = coverSignups;
+                let newCoverSignups = { ...currentCoverSignups };
+
+                if (targetUser) {
+                    if (targetUser.role === this.PART_TIMER_ROLE) {
+                        // 3a) 若為工讀生：移除當日可上班與代班預約
+                        const availabilityKey = `${targetUser.id}-${year}-${month}`;
+                        const currentAvail = newUserAvailability[availabilityKey] || [];
+                        const filteredAvail = currentAvail.filter(d => d !== dateString);
+                        if (filteredAvail.length > 0) {
+                            newUserAvailability[availabilityKey] = filteredAvail;
+                        } else {
+                            delete newUserAvailability[availabilityKey];
+                        }
+
+                        // 移除該工讀生在此日期的代班報名
+                        Object.keys(newCoverSignups).forEach(signupId => {
+                            const parts = signupId.split('-');
+                            if (parts.length >= 5) {
+                                const dateInId = parts.slice(parts.length - 4, parts.length - 1).join('-');
+                                if (dateInId === dateString && newCoverSignups[signupId] === targetUser.id) {
+                                    delete newCoverSignups[signupId];
+                                }
+                            }
+                        });
+                    } else if (this.FULLTIME_ROLES.includes(targetUser.role)) {
+                        // 3b) 若為正職：將該日加入休假，避免自動顯示為上班
+                        const vacationKey = `${targetUser.id}-${year}-${month}`;
+                        const currentVac = newUserVacations[vacationKey] || [];
+                        if (!currentVac.includes(dateString)) {
+                            newUserVacations[vacationKey] = [...currentVac, dateString];
+                        }
+                    }
+                }
+
+                // 4) 依需求：輸出取消前/後的代班資料到 console 方便除錯
+                console.log('取消代班前:', currentCoverSignups);
+                console.log('取消代班後:', newCoverSignups);
+                
+                // 5) 一次性更新所有欄位，避免衝突
+                console.log('準備更新所有欄位:', {
+                    manualAssignments: newManualAssignments,
+                    userAvailability: newUserAvailability,
+                    userVacations: newUserVacations,
+                    coverSignups: newCoverSignups
+                });
+                
+                try {
+                    await this.scheduleManager.updateMultiple({
+                        manualAssignments: newManualAssignments,
+                        userAvailability: newUserAvailability,
+                        userVacations: newUserVacations,
+                        coverSignups: newCoverSignups
+                    });
+                    console.log('所有欄位更新成功');
+                } catch (error) {
+                    console.error('所有欄位更新失敗:', error);
+                    this.uiManager.showToast('更新資料失敗，請稍後再試。');
+                    return;
+                }
+
+                this.uiManager.showToast('手動排班已刪除，已同步清理當日上班顯示！');
             }
 
             renderAppView() {
@@ -1390,24 +1505,35 @@
                 this.uiManager.changeUsernameForm.addEventListener('submit', (e) => this.handleChangeUsername(e));
 
                 this.uiManager.calendarView.addEventListener('click', async (e) => {
+                    // 先處理細粒度按鈕，避免被日期點擊邏輯攔截
+                    if (e.target.closest('.delete-manual-assignment-btn')) {
+                        e.stopPropagation();
+                        const btn = e.target.closest('.delete-manual-assignment-btn');
+                        console.log('點擊刪除按鈕:', { 
+                            date: btn.dataset.date, 
+                            username: btn.dataset.username,
+                            button: btn 
+                        });
+                        await this.handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
+                        return;
+                    }
+                    if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
+                        await this.handleCoverShiftAction(e);
+                        return;
+                    }
                     if (e.target.closest('#prev-month-btn')) {
                         this.calendarManager.previousMonth();
                         this.renderAppView();
+                        return;
                     }
                     if (e.target.closest('#next-month-btn')) {
                         this.calendarManager.nextMonth();
                         this.renderAppView();
+                        return;
                     }
                     if (e.target.closest('.calendar-day')) {
                         await this.handleDayClick(e);
-                    }
-                    if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
-                        await this.handleCoverShiftAction(e);
-                    }
-                    if (e.target.closest('.delete-manual-assignment-btn')) {
-                        e.stopPropagation();
-                        const btn = e.target.closest('.delete-manual-assignment-btn');
-                        await this.handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
+                        return;
                     }
                 });
                 this.uiManager.calendarView.addEventListener('submit', async (e) => {
