@@ -957,8 +957,8 @@
                 form.reset();
             }
 
-            async handleDeleteManualAssignment(dateString, username) {
-                console.log('開始刪除手動排班:', { dateString, username });
+            async handleDeleteManualAssignment(dateString, username, assignedShift) {
+                console.log('開始刪除手動排班:', { dateString, username, assignedShift });
                 
                 // 僅允許管理者執行刪除手動班次與相關清理
                 if (this.authManager.getCurrentUserData()?.role !== this.ADMIN_ROLE) {
@@ -979,14 +979,19 @@
                     return;
                 }
 
-                // 1) 先找到該日期，再找到該人在該日期的具體位置（如 0 行），然後刪除
+                // 1) 先找到該日期，再找到該人在該日期的具體班別，然後刪除
                 const dayAssignments = manualAssignments[dateString] || [];
-                const targetIndex = dayAssignments.findIndex(a => a.username === username);
+                const targetIndex = dayAssignments.findIndex(a => 
+                    a.username === username && a.assignedShift === assignedShift
+                );
                 
                 if (targetIndex === -1) {
-                    this.uiManager.showToast('找不到該使用者的排班記錄。');
+                    console.log('找不到匹配的排班記錄:', { dateString, username, assignedShift });
+                    this.uiManager.showToast('找不到匹配的排班記錄。');
                     return;
                 }
+                
+                console.log(`找到匹配的排班記錄，位置: ${targetIndex}`);
                 
                 const newManualAssignments = { ...manualAssignments };
                 const updatedDayAssignments = [...dayAssignments];
@@ -1356,7 +1361,8 @@
                                 role: role, 
                                 isCover: true, // Treat as cover to get time-specific labels
                                 timeSlot: timeSlot,
-                                isManual: true
+                                isManual: true,
+                                assignedShift: assignment.assignedShift // 保留原始班別資訊
                             });
                         });
                     }
@@ -1448,7 +1454,7 @@
                                 }
                                 
                                 const deleteButtonHtml = (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE && isManual)
-                                    ? `<button data-date="${dateString}" data-username="${username}" class="delete-manual-assignment-btn text-red-400 hover:text-red-700 font-bold">&times;</button>`
+                                    ? `<button data-date="${dateString}" data-username="${username}" data-shift="${workInfo.assignedShift || ''}" class="delete-manual-assignment-btn text-red-400 hover:text-red-700 font-bold">&times;</button>`
                                     : '';
 
                                 return `<div class="flex items-center justify-between w-full">
@@ -1536,9 +1542,10 @@
                         console.log('點擊刪除按鈕:', { 
                             date: btn.dataset.date, 
                             username: btn.dataset.username,
+                            shift: btn.dataset.shift,
                             button: btn 
                         });
-                        await this.handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username);
+                        await this.handleDeleteManualAssignment(btn.dataset.date, btn.dataset.username, btn.dataset.shift);
                         return;
                     }
                     if (e.target.closest('.signup-cover-btn') || e.target.closest('.cancel-cover-btn')) {
