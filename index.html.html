@@ -64,14 +64,21 @@
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
         }
         
-        /* === 新增這個樣式 === */
+        /* === (EXISTING) Modal Style === */
         #cover-shift-modal.hidden {
             display: none;
         }
         #cover-shift-modal:not(.hidden) {
             display: flex;
         }
-        /* === 樣式結束 === */
+        
+        /* === (NEW) Modal Style === */
+        #shift-select-modal.hidden {
+            display: none;
+        }
+        #shift-select-modal:not(.hidden) {
+            display: flex;
+        }
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -170,6 +177,20 @@
             </div>
         </div>
 
+        <div id="shift-select-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">選擇班次</h2>
+                    <button id="close-shift-select-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <p id="shift-select-info" class="text-gray-700 mb-4">您在這天有多個班次，請選擇要找人代班的班次：</p>
+                <div id="shift-select-options" class="space-y-3">
+                    </div>
+            </div>
+        </div>
+
         <div id="cover-shift-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
@@ -191,6 +212,8 @@
                 </form>
             </div>
         </div>
+
+
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
         </div>
@@ -631,13 +654,18 @@
                 this.passwordSettingsError = document.getElementById('password-settings-error');
                 this.usernameSettingsError = document.getElementById('username-settings-error');
 
-                // === 新增這些行 ===
+                // === (NEW) 班次選擇 Modal ===
+                this.shiftSelectModal = document.getElementById('shift-select-modal');
+                this.closeShiftSelectBtn = document.getElementById('close-shift-select-btn');
+                this.shiftSelectInfo = document.getElementById('shift-select-info');
+                this.shiftSelectOptions = document.getElementById('shift-select-options');
+                
+                // === (EXISTING) 代班人選擇 Modal ===
                 this.coverShiftModal = document.getElementById('cover-shift-modal');
                 this.closeCoverShiftBtn = document.getElementById('close-cover-shift-btn');
                 this.coverShiftForm = document.getElementById('cover-shift-form');
                 this.coverShiftInfo = document.getElementById('cover-shift-info');
                 this.coverShiftSelect = document.getElementById('cover-shift-replacement-select');
-                // === 新增結束 ===
             }
 
             showToast(message) {
@@ -685,7 +713,32 @@
                 this.settingsModal.classList.add('hidden');
             }
 
-            // === 新增這兩個函式 ===
+            // === (NEW) 顯示班次選擇 Modal ===
+            showShiftSelectModal(date, shifts) {
+                this.shiftSelectInfo.textContent = `您在 ${date} 有 ${shifts.length} 個班次，請選擇要找人代班的班次：`;
+                this.shiftSelectOptions.innerHTML = ''; // 清空舊按鈕
+
+                shifts.forEach(shiftData => {
+                    const button = document.createElement('button');
+                    button.className = "w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700";
+                    button.textContent = `班次: (${shiftData.shift})`;
+                    // 將資料存在按鈕上，以便事件監聽器抓取
+                    button.dataset.date = date;
+                    button.dataset.shift = shiftData.shift;
+                    button.classList.add('shift-select-btn'); // 加上 class 供事件委派使用
+                    this.shiftSelectOptions.appendChild(button);
+                });
+
+                this.shiftSelectModal.classList.remove('hidden');
+            }
+
+            // === (NEW) 隱藏班次選擇 Modal ===
+            hideShiftSelectModal() {
+                this.shiftSelectModal.classList.add('hidden');
+                this.shiftSelectOptions.innerHTML = ''; // 清空按鈕
+            }
+
+            // === (EXISTING) 顯示代班人選擇 Modal ===
             showCoverShiftModal(date, shift, replacementOptions) {
                 // 儲存資訊，以便表單提交時使用
                 this.coverShiftForm.dataset.date = date;
@@ -706,11 +759,11 @@
                 this.coverShiftModal.classList.remove('hidden');
             }
 
+            // === (EXISTING) 隱藏代班人選擇 Modal ===
             hideCoverShiftModal() {
                 this.coverShiftModal.classList.add('hidden');
                 this.coverShiftForm.reset();
             }
-            // === 新增結束 ===
 
             updateUserInfo(username, role) {
                 this.userNameSpan.textContent = username;
@@ -1241,7 +1294,7 @@
                     await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
                 
                 // =======================
-                // === 修改這個區塊 ===
+                // === (MODIFIED) Block ===
                 // =======================
                 } else if (currentUserData.role === "外場工讀生") {
                     
@@ -1252,22 +1305,23 @@
                     const myShifts = (outsideSchedule[clickedDateStr] || []).filter(
                         s => s.username === currentUserData.username
                     );
-
-                    if (myShifts.length > 0) {
-                        // === 情境1: 使用者有被排班，顯示代班 Modal ===
+                    
+                    // --- NEW LOGIC ---
+                    if (myShifts.length > 1) {
+                        // === 情境1: 多個班次，顯示班次選擇器 ===
+                        this.uiManager.showShiftSelectModal(clickedDateStr, myShifts);
+                    
+                    } else if (myShifts.length === 1) {
+                        // === 情境2: 一個班次，直接顯示同事選擇器 ===
                         const allUsers = this.scheduleManager.getAllUsers();
                         const replacementOptions = allUsers.filter(u => 
                             u.role === "外場工讀生" && u.id !== this.authManager.getCurrentUser().uid
                         );
-                        
-                        // 簡單起見，我們先處理當天的第一個班次
-                        // (如果未來一個人一天可能有多個班次，這裡需要改成讓使用者選擇)
                         const shiftToCover = myShifts[0].shift;
-
                         this.uiManager.showCoverShiftModal(clickedDateStr, shiftToCover, replacementOptions);
 
                     } else {
-                        // === 情境2: 使用者沒有被排班，執行原有的「標記不上班」邏輯 ===
+                        // === 情境3: 沒有班次，執行「標記不上班」 ===
                         const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
                         const currentUnavailability = userAvailability?.[availabilityKey] || [];
                         const newUnavailability = currentUnavailability.includes(clickedDateStr)
@@ -1276,13 +1330,29 @@
                             
                         await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
                     }
+                    // --- END NEW LOGIC ---
                 }
                 // =======================
-                // === 修改結束 ===
+                // === End Modified Block ===
                 // =======================
             }
 
-            // === 新增這個函式 ===
+            // === (NEW) 處理班次選擇的函式 ===
+            handleShiftSelect(date, shift) {
+                // 1. 隱藏班次選擇 modal
+                this.uiManager.hideShiftSelectModal();
+
+                // 2. 準備並顯示同事選擇 modal
+                const allUsers = this.scheduleManager.getAllUsers();
+                const replacementOptions = allUsers.filter(u => 
+                    u.role === "外場工讀生" && u.id !== this.authManager.getCurrentUser().uid
+                );
+
+                this.uiManager.showCoverShiftModal(date, shift, replacementOptions);
+            }
+            // === 新增結束 ===
+
+            // === (EXISTING) 處理代班人指派的函式 ===
             async handleAssignCoverShift(e) {
                 e.preventDefault();
                 
@@ -1339,7 +1409,7 @@
                     this.uiManager.showToast(`換班失敗：${error.message}`);
                 }
             }
-            // === 新增結束 ===
+            // === 函式結束 ===
 
             // 外場排班系統
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
@@ -2569,12 +2639,25 @@
                 this.uiManager.changePasswordForm.addEventListener('submit', (e) => this.handleChangePassword(e));
                 this.uiManager.changeUsernameForm.addEventListener('submit', (e) => this.handleChangeUsername(e));
 
-                // === 新增這些行 ===
+                // === (EXISTING) 代班人選擇 Modal 監聽 ===
                 this.uiManager.closeCoverShiftBtn.addEventListener('click', () => {
                     this.uiManager.hideCoverShiftModal();
                 });
                 this.uiManager.coverShiftForm.addEventListener('submit', (e) => {
                     this.handleAssignCoverShift(e);
+                });
+                
+                // === (NEW) 班次選擇 Modal 監聽 ===
+                this.uiManager.closeShiftSelectBtn.addEventListener('click', () => {
+                    this.uiManager.hideShiftSelectModal();
+                });
+                
+                // 使用事件委派來監聽動態產生的班次按鈕
+                this.uiManager.shiftSelectOptions.addEventListener('click', (e) => {
+                    const button = e.target.closest('.shift-select-btn');
+                    if (button) {
+                        this.handleShiftSelect(button.dataset.date, button.dataset.shift);
+                    }
                 });
                 // === 新增結束 ===
 
