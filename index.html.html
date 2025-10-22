@@ -33,7 +33,7 @@
             background: #555;
         }
         /* 避免 Tailwind CSS JIT 編譯器移除動態 class */
-        .bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-indigo-100, .bg-pink-100, .bg-purple-100, .bg-gray-100 {}
+        .bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-indigo-100, .bg-pink-100, .bg-purple-100, .bg-gray-100, .bg-orange-100 {}
         .text-blue-800, .text-green-800, .text-yellow-800, .text-indigo-800, .text-pink-800, .text-purple-800, .text-gray-800, .text-amber-800, .text-orange-800 {} /* Added text-orange-800 */
         .border-blue-400, .border-green-400, .border-yellow-400, .border-indigo-400, .border-pink-400, .border-purple-400, .border-gray-400 {}
         .hidden { display: none; }
@@ -2354,7 +2354,7 @@
                 }
             }
 
-            // 渲染外場月曆 (修改 - 加入 manualAssignments 渲染)
+            // 渲染外場月曆 (修改 - 加入 manualAssignments 渲染 和 橙色警告)
             async renderOutsideCalendar() {
                 this.calendarManager.getCalendarDate().setDate(1);
                 const month = this.calendarManager.getMonth();
@@ -2473,13 +2473,53 @@
                         // Admins can still click non-Thursday holidays
                         if (currentUserData.role === this.ADMIN_ROLE && !isThursday) day.classList.add('cursor-pointer');
                     } else {
-                        if(holidayName) day.classList.add('bg-yellow-100');
+                        // ===============================================
+                        // === (NEW) Shift Shortage Check (Orange BG) ===
+                        // ===============================================
+                        const date = new Date(year, month, i);
+                        const dayOfWeek = date.getDay();
+                        const workingUsers = dailySchedule[dateString] || [];
+                        const numShifts = workingUsers.length;
+
+                        let isCounterVacation = false;
+                        for (const staff of counterStaff) { // counterStaff is defined above this loop
+                            const vacationKey = `${staff.id}-${year}-${month + 1}`;
+                            const monthlyVacations = userVacations[vacationKey] || [];
+                            if (monthlyVacations.includes(dateString)) {
+                                isCounterVacation = true;
+                                break;
+                            }
+                        }
+                        
+                        let isShortage = false;
+                        if (isCounterVacation) {
+                            // 櫃檯休假: 應有 5 班 (早櫃, 早班, 晚櫃, 洗碗, 收班)
+                            if (numShifts < 5) { isShortage = true; }
+                        } else {
+                            // 櫃檯未休假
+                            if (dayOfWeek === 0 || dayOfWeek === 6) { 
+                                // 週末: 應有 4 班 (櫃檯, 早班, 收班, 洗碗)
+                                if (numShifts < 4) { isShortage = true; }
+                            } else { 
+                                // 平日: 應有 3 班 (櫃檯, 收班, 洗碗)
+                                if (numShifts < 3) { isShortage = true; }
+                            }
+                        }
+
+                        if (isShortage) {
+                            day.classList.add('bg-orange-100');
+                        } else if (holidayName) {
+                            day.classList.add('bg-yellow-100');
+                        }
+                        // ===============================================
+                        // === (END) New Shift Shortage Check ===
+                        // ===============================================
                         
                         if (this.OUTSIDE_ROLES.includes(currentUserData.role) || currentUserData.role === this.ADMIN_ROLE) { // Admins should also be able to click
                             day.classList.add('cursor-pointer');
                         }
 
-                        const workingUsers = dailySchedule[dateString] || [];
+                        // const workingUsers = dailySchedule[dateString] || []; // (Moved up)
                         let usersHtml = '<div class="flex-grow"></div>';
                         if (workingUsers.length > 0) {
                             
@@ -2548,7 +2588,7 @@
                         
                         let selfStatusHtml = '';
                          if (currentUserData.role === this.ADMIN_ROLE) {
-                             if(!holidayName) day.classList.add('bg-gray-50'); // Keep admin background neutral
+                             if(!holidayName && !isShortage) day.classList.add('bg-gray-50'); // (MODIFIED) Keep admin background neutral
                          } else if (currentUserData.role === "外場櫃檯") {
                             const vacationKey = `${currentUserData.uid}-${year}-${month+1}`;
                             const isVacation = (userVacations[vacationKey] || []).includes(dateString);
@@ -2556,7 +2596,7 @@
                                 day.classList.add('bg-red-100', 'border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">休假</p>`;
                             } else {
-                                if(!holidayName) day.classList.add('bg-green-100');
+                                if(!holidayName && !isShortage) day.classList.add('bg-green-100'); // (MODIFIED)
                                 day.classList.add('border', 'border-green-400');
                                 selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
@@ -2566,15 +2606,15 @@
                             const isWorking = workingUsers.some(w => w.username === currentUserData.username);
 
                             if (isWorking) { // Check if working first
-                                if(!holidayName) day.classList.add('bg-blue-100');
+                                if(!holidayName && !isShortage) day.classList.add('bg-blue-100'); // (MODIFIED)
                                 day.classList.add('border', 'border-blue-400');
                                 selfStatusHtml = `<p class="font-semibold text-blue-700">上班</p>`;
                             } else if (isUnavailable) { // Then check if unavailable
-                                if(!holidayName) day.classList.add('bg-red-100');
+                                if(!holidayName && !isShortage) day.classList.add('bg-red-100'); // (MODIFIED)
                                 day.classList.add('border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">不上班</p>`;
                             } else { // Otherwise, available but not scheduled
-                                if(!holidayName) day.classList.add('bg-white');
+                                if(!holidayName && !isShortage) day.classList.add('bg-white'); // (MODIFIED)
                                 selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
                             }
                         }
