@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>韓泰泰排班系統</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 Google Fonts 和 Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -69,10 +67,8 @@
 </head>
 <body class="antialiased text-gray-800">
 
-    <!-- Auth Container -->
     <div id="auth-container" class="min-h-screen flex items-center justify-center bg-gray-100">
         <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg">
-            <!-- Login Form -->
             <div id="login-view">
                 <h2 class="text-2xl font-bold text-center">登入系統</h2>
                 <form id="login-form" class="mt-8 space-y-6">
@@ -82,7 +78,6 @@
                     <p class="text-center text-sm">還沒有帳號？ <a href="#" id="show-register" class="font-medium text-indigo-600 hover:underline">立即註冊</a></p>
                 </form>
             </div>
-            <!-- Register Form -->
             <div id="register-view" class="hidden">
                 <h2 class="text-2xl font-bold text-center">註冊新帳號</h2>
                 <form id="register-form" class="mt-8 space-y-6">
@@ -94,6 +89,8 @@
                         <select id="register-role" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
                             <option value="" disabled selected>請選擇您的職位</option>
                             <option value="内場工讀生">内場工讀生</option>
+                            <option value="外場工讀生">外場工讀生</option>
+                            <option value="外場櫃檯">外場櫃檯</option>
                         </select>
                     </div>
                     <button type="submit" class="w-full p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">註冊</button>
@@ -104,11 +101,9 @@
         </div>
     </div>
     
-    <!-- App Container -->
     <div id="app" class="hidden min-h-screen p-1 sm:p-4 md:p-8">
         <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-2 sm:p-6 md:p-8">
             
-            <!-- Header -->
             <header class="mb-6 md:mb-8">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div class="flex items-center gap-3">
@@ -130,21 +125,15 @@
                 <p id="app-subtitle" class="mt-2 text-gray-500 text-sm md:text-base">一個讓團隊合作更順暢的排班解決方案。</p>
             </header>
 
-            <!-- Main Content -->
             <main>
-                <!-- Standard View for Admins -->
                 <div id="standard-view">
-                    <!-- ... (admin view remains unchanged) ... -->
-                </div>
+                    </div>
 
-                <!-- Calendar View -->
                 <div id="calendar-view" class="hidden">
-                    <!-- This will be dynamically structured based on role -->
-                </div>
+                    </div>
             </main>
         </div>
 
-        <!-- Settings Modal -->
         <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-md p-8 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-6">
@@ -174,7 +163,6 @@
 
 
 
-        <!-- Notification Toast -->
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
         </div>
@@ -491,7 +479,8 @@
                             userAvailability: {},
                             coverSignups: {},
                             adminHolidays: [],
-                            manualAssignments: {}
+                            manualAssignments: {},
+                            outsideSchedule: {}
                         });
                     }
                     // 觸發重新渲染
@@ -563,6 +552,10 @@
 
             async updateManualAssignments(assignments) {
                 await setDoc(doc(this.db, "scheduleData", "main"), { manualAssignments: assignments }, { merge: true });
+            }
+
+            async updateOutsideSchedule(schedule) {
+                await setDoc(doc(this.db, "scheduleData", "main"), { outsideSchedule: schedule }, { merge: true });
             }
 
             async updateMultiple(fields) {
@@ -704,6 +697,7 @@
                 this.initializeConstants();
                 this.setupEventListeners();
                 this.setupAuthStateListener();
+                this.setupAutoSchedule();
             }
 
             initializeFirebase() {
@@ -738,6 +732,262 @@
                 this.ADMIN_ROLE = "管理者";
                 this.FULLTIME_ROLES = ["内場備菜班", "内場炸爐班"];
                 this.PART_TIMER_ROLE = "内場工讀生";
+                this.OUTSIDE_ROLES = ["外場工讀生", "外場櫃檯"];
+                this.INSIDE_ROLES = ["内場工讀生", "内場備菜班", "内場炸爐班"];
+            }
+
+            setupAutoSchedule() {
+                // 每分鐘檢查一次是否需要自動排班
+                setInterval(() => {
+                    this.checkAutoSchedule();
+                }, 60000); // 60秒檢查一次
+                
+                // 頁面載入時也檢查一次
+                this.checkAutoSchedule();
+            }
+
+            async checkAutoSchedule() {
+                const now = new Date();
+                const currentDay = now.getDate();
+                const currentHour = now.getHours();
+                const currentMinute = now.getMinutes();
+                const currentMonth = now.getMonth() + 1;
+                const currentYear = now.getFullYear();
+                
+                // 檢查是否為25號早上8點（允許8:00-8:01之間執行）
+                if (currentDay === 25 && currentHour === 8 && currentMinute <= 1) {
+                    const lastRunKey = `autoSchedule_25_${currentYear}_${currentMonth}`;
+                    const lastRun = localStorage.getItem(lastRunKey);
+                    const today = now.toDateString();
+                    
+                    if (lastRun !== today) {
+                        localStorage.setItem(lastRunKey, today);
+                        await this.autoScheduleNextMonth();
+                    }
+                }
+                
+                // 檢查是否為10號早上8點（允許8:00-8:01之間執行）
+                if (currentDay === 10 && currentHour === 8 && currentMinute <= 1) {
+                    const lastRunKey = `autoSchedule_10_${currentYear}_${currentMonth}`;
+                    const lastRun = localStorage.getItem(lastRunKey);
+                    const today = now.toDateString();
+                    
+                    if (lastRun !== today) {
+                        localStorage.setItem(lastRunKey, today);
+                        await this.autoScheduleCurrentMonthSecondHalf();
+                    }
+                }
+            }
+
+            async autoScheduleNextMonth() {
+                try {
+                    const now = new Date();
+                    const nextMonth = now.getMonth() + 1 === 12 ? 0 : now.getMonth() + 1;
+                    const nextYear = now.getMonth() + 1 === 12 ? now.getFullYear() + 1 : now.getFullYear();
+                    
+                    console.log(`自動排班：${nextYear}年${nextMonth + 1}月1-15號`);
+                    await this.generateOutsideScheduleAuto(nextYear, nextMonth + 1, 1, 15);
+                    
+                    // 發送通知給管理員（如果有的話）
+                    if (this.uiManager) {
+                        this.uiManager.showToast(`已自動排下個月1-15號的班表`);
+                    }
+                } catch (error) {
+                    console.error('自動排班失敗:', error);
+                }
+            }
+
+            async autoScheduleCurrentMonthSecondHalf() {
+                try {
+                    const now = new Date();
+                    const currentMonth = now.getMonth() + 1;
+                    const currentYear = now.getFullYear();
+                    
+                    console.log(`自動排班：${currentYear}年${currentMonth}月16-31號`);
+                    await this.generateOutsideScheduleAuto(currentYear, currentMonth, 16);
+                    
+                    // 發送通知給管理員（如果有的話）
+                    if (this.uiManager) {
+                        this.uiManager.showToast(`已自動排本月16-31號的班表`);
+                    }
+                } catch (error) {
+                    console.error('自動排班失敗:', error);
+                }
+            }
+
+            // 專門用於自動排班的方法，不依賴勾選框狀態
+            async generateOutsideScheduleAuto(year, month, startDay = 1, endDay = null) {
+                const allUsers = this.scheduleManager.getAllUsers();
+                const allData = this.scheduleManager.getAllData();
+                const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
+                
+                const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
+                const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
+                
+                if (outsideWorkers.length === 0) {
+                    console.log('沒有外場工讀生可以排班');
+                    return;
+                }
+                
+                const lastDayOfMonth = new Date(year, month, 0).getDate();
+                const actualEndDay = endDay || lastDayOfMonth;
+                const newSchedule = { ...outsideSchedule };
+                
+                // 獲取櫃檯休假日期
+                const counterVacations = [];
+                counterStaff.forEach(staff => {
+                    const vacationKey = `${staff.id}-${year}-${month}`;
+                    const vacations = userVacations[vacationKey] || [];
+                    vacations.forEach(date => {
+                        counterVacations.push({ date, staff: staff.username });
+                    });
+                });
+                
+                // 獲取工讀生不可上班日期
+                const workerUnavailability = {};
+                outsideWorkers.forEach(worker => {
+                    const availabilityKey = `${worker.id}-${year}-${month}`;
+                    workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
+                });
+                
+                // 計算每個工讀生的工作天數
+                const workerWorkDays = {};
+                outsideWorkers.forEach(worker => {
+                    workerWorkDays[worker.username] = 0;
+                });
+                
+                for (let day = startDay; day <= actualEndDay; day++) {
+                    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const date = new Date(year, month - 1, day);
+                    const dayOfWeek = date.getDay();
+                    
+                    // 跳過星期四（公休日）
+                    if (dayOfWeek === 4) continue;
+                    
+                    const daySchedule = [];
+                    
+                    // 檢查是否有櫃檯休假
+                    const counterVacation = counterVacations.find(cv => cv.date === dateString);
+                    
+                    if (counterVacation) {
+                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
+                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
+                            !workerUnavailability[worker.username].includes(dateString)
+                        );
+                        
+                        if (dayAvailableWorkers.length > 0) {
+                            // 總共5個班別
+                            const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
+                            
+                            // 平均分配班別給可用的工讀生
+                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                                workerWorkDays[a.username] - workerWorkDays[b.username]
+                            );
+                            // 打亂班別以隨機分配
+                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                            
+                            // 分配邏輯：
+                            // 1. 優先把班別分配給不同的人
+                            // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
+                            let workerIndex = 0;
+                            for (const shift of shuffledShifts) {
+                                let assigned = false;
+                                let attempt = 0;
+                                
+                                // 嘗試分配給下一個工人，最多繞一圈
+                                while (!assigned && attempt < sortedWorkers.length) {
+                                    const worker = sortedWorkers[workerIndex % sortedWorkers.length];
+                                    
+                                    let hasConflict = false;
+                                    const morningGroup = ["早櫃", "早班"];
+                                    const eveningGroup = ["晚櫃", "洗碗", "收班"];
+
+                                    // Check for conflicts
+                                    for (const existing of daySchedule) {
+                                        if (existing.username === worker.username) {
+                                            // Rule 1: "早櫃" and "早班" cannot be the same person
+                                            if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
+                                                hasConflict = true;
+                                                break;
+                                            }
+                                            
+                                            // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
+                                            if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
+                                                hasConflict = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if (!hasConflict) {
+                                        daySchedule.push({
+                                            username: worker.username,
+                                            role: "外場工讀生",
+                                            shift: shift
+                                        });
+                                        workerWorkDays[worker.username]++;
+                                        assigned = true;
+                                    }
+                                    
+                                    workerIndex++;
+                                    attempt++;
+                                }
+                            }
+                        }
+                    } else {
+                        // 正常排班
+                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
+                            !workerUnavailability[worker.username].includes(dateString)
+                        );
+                        
+                        if (dayAvailableWorkers.length > 0) {
+                            // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
+                            let shifts = [];
+                            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                                // 星期一到星期五：收班、洗碗（櫃檯由櫃檯人員擔任）
+                                shifts = ["收班", "洗碗"];
+                            } else {
+                                // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
+                                shifts = ["早班", "收班", "洗碗"];
+                            }
+                            
+                            // 平均分配班別給可用的工讀生
+                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                                workerWorkDays[a.username] - workerWorkDays[b.username]
+                            );
+                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                            
+                            for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
+                                const worker = sortedWorkers[i];
+                                const shift = shuffledShifts[i];
+                                
+                                // 檢查衝突：洗碗和收班不能是同一個人
+                                const hasConflict = daySchedule.some(existing => 
+                                    existing.username === worker.username && 
+                                    ((existing.shift === "洗碗" && shift === "收班") || 
+                                     (existing.shift === "收班" && shift === "洗碗"))
+                                );
+                                
+                                if (!hasConflict) {
+                                    daySchedule.push({
+                                        username: worker.username,
+                                        role: "外場工讀生",
+                                        shift: shift
+                                    });
+                                    workerWorkDays[worker.username]++;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (daySchedule.length > 0) {
+                        newSchedule[dateString] = daySchedule;
+                    }
+                }
+                
+                // 更新排班資料
+                await this.scheduleManager.updateOutsideSchedule(newSchedule);
+                console.log('外場排班已自動生成！');
             }
 
             async handleRegister(e) {
@@ -840,6 +1090,8 @@
                     await this.handleFullTimeDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations);
                 } else if (this.authManager.getCurrentUserData().role === this.PART_TIMER_ROLE) {
                     await this.handlePartTimerDayClick(clickedDateStr, yearFromStr, monthFromStr);
+                } else if (this.OUTSIDE_ROLES.includes(this.authManager.getCurrentUserData().role)) {
+                    await this.handleOutsideDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations);
                 }
             }
 
@@ -886,6 +1138,236 @@
                     : [...currentAvailability, clickedDateStr];
                     
                 await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newAvailability);
+            }
+
+            async handleOutsideDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations) {
+                const currentUserData = this.authManager.getCurrentUserData();
+                
+                if (currentUserData.role === "外場櫃檯") {
+                    // 外場櫃檯的休假邏輯（類似內場備菜班）
+                    const vacationKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                    const currentVacations = userVacations[vacationKey] || [];
+                    const isVacation = currentVacations.includes(clickedDateStr);
+                    
+                    let newVacations;
+
+                    if (isVacation) {
+                        newVacations = currentVacations.filter(d => d !== clickedDateStr);
+                    } else {
+                        if(currentVacations.length >= 4) return this.uiManager.showToast('本月休假已選滿4天');
+                        
+                        const allUsers = this.scheduleManager.getAllUsers();
+                        const otherCounterStaff = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && u.role === "外場櫃檯");
+                        let isDayTaken = false;
+                        for (const otherUser of otherCounterStaff) {
+                            const otherUserVacationKey = `${otherUser.id}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                            const otherUserVacations = userVacations[otherUserVacationKey] || [];
+                            if (otherUserVacations.includes(clickedDateStr)) {
+                                isDayTaken = true;
+                                break;
+                            }
+                        }
+
+                        if (isDayTaken) {
+                            return this.uiManager.showToast(`已有其他外場櫃檯於此日排休，無法選擇。`);
+                        }
+                        
+                        newVacations = [...currentVacations, clickedDateStr];
+                    }
+                    
+                    await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
+                } else if (currentUserData.role === "外場工讀生") {
+                    // 外場工讀生選擇不上班的日子
+                    const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                    const allData = this.scheduleManager.getAllData();
+                    const currentUnavailability = allData.userAvailability?.[availabilityKey] || [];
+                    const newUnavailability = currentUnavailability.includes(clickedDateStr)
+                        ? currentUnavailability.filter(d => d !== clickedDateStr)
+                        : [...currentUnavailability, clickedDateStr];
+                        
+                    await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
+                }
+            }
+
+            // 外場排班系統
+            async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
+                const allUsers = this.scheduleManager.getAllUsers();
+                const allData = this.scheduleManager.getAllData();
+                const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
+                
+                const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
+                const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
+                
+                // 獲取勾選框狀態，只排有勾選的工讀生
+                const availableWorkers = outsideWorkers.filter(worker => {
+                    const checkbox = document.getElementById(`worker-${worker.id}`);
+                    return checkbox ? checkbox.checked : true;
+                });
+                
+                if (availableWorkers.length === 0) {
+                    this.uiManager.showToast('沒有外場工讀生可以排班');
+                    return;
+                }
+                
+                const lastDayOfMonth = new Date(year, month, 0).getDate();
+                const actualEndDay = endDay || lastDayOfMonth;
+                const newSchedule = { ...outsideSchedule };
+                
+                // 獲取櫃檯休假日期
+                const counterVacations = [];
+                counterStaff.forEach(staff => {
+                    const vacationKey = `${staff.id}-${year}-${month}`;
+                    const vacations = userVacations[vacationKey] || [];
+                    vacations.forEach(date => {
+                        counterVacations.push({ date, staff: staff.username });
+                    });
+                });
+                
+                // 獲取工讀生不可上班日期
+                const workerUnavailability = {};
+                availableWorkers.forEach(worker => {
+                    const availabilityKey = `${worker.id}-${year}-${month}`;
+                    workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
+                });
+                
+                // 計算每個工讀生的工作天數
+                const workerWorkDays = {};
+                availableWorkers.forEach(worker => {
+                    workerWorkDays[worker.username] = 0;
+                });
+                
+                for (let day = startDay; day <= actualEndDay; day++) {
+                    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const date = new Date(year, month - 1, day);
+                    const dayOfWeek = date.getDay();
+                    
+                    // 跳過星期四（公休日）
+                    if (dayOfWeek === 4) continue;
+                    
+                    const daySchedule = [];
+                    
+                    // 檢查是否有櫃檯休假
+                    const counterVacation = counterVacations.find(cv => cv.date === dateString);
+                    
+                    if (counterVacation) {
+                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
+                        const dayAvailableWorkers = availableWorkers.filter(worker => 
+                            !workerUnavailability[worker.username].includes(dateString)
+                        );
+                        
+                        if (dayAvailableWorkers.length > 0) {
+                            // 總共5個班別
+                            const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
+                            
+                            // 平均分配班別給可用的工讀生
+                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                                workerWorkDays[a.username] - workerWorkDays[b.username]
+                            );
+                            // 打亂班別以隨機分配
+                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                            
+                            // 分配邏輯：
+                            // 1. 優先把班別分配給不同的人
+                            // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
+                            let workerIndex = 0;
+                            for (const shift of shuffledShifts) {
+                                let assigned = false;
+                                let attempt = 0;
+                                
+                                // 嘗試分配給下一個工人，最多繞一圈
+                                while (!assigned && attempt < sortedWorkers.length) {
+                                    const worker = sortedWorkers[workerIndex % sortedWorkers.length];
+                                    
+                                    let hasConflict = false;
+                                    const morningGroup = ["早櫃", "早班"];
+                                    const eveningGroup = ["晚櫃", "洗碗", "收班"];
+
+                                    // Check for conflicts
+                                    for (const existing of daySchedule) {
+                                        if (existing.username === worker.username) {
+                                            // Rule 1: "早櫃" and "早班" cannot be the same person
+                                            if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
+                                                hasConflict = true;
+                                                break;
+                                            }
+                                            
+                                            // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
+                                            if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
+                                                hasConflict = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if (!hasConflict) {
+                                        daySchedule.push({
+                                            username: worker.username,
+                                            role: "外場工讀生",
+                                            shift: shift
+                                        });
+                                        workerWorkDays[worker.username]++;
+                                        assigned = true;
+                                    }
+                                    
+                                    workerIndex++;
+                                    attempt++;
+                                }
+                            }
+                        }
+                    } else {
+                        // 正常排班
+                        const dayAvailableWorkers = availableWorkers.filter(worker => 
+                            !workerUnavailability[worker.username].includes(dateString)
+                        );
+                        
+                        if (dayAvailableWorkers.length > 0) {
+                            // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
+                            let shifts = [];
+                            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                                // 星期一到星期五：收班、洗碗（櫃檯由櫃檯人員擔任）
+                                shifts = ["收班", "洗碗"];
+                            } else {
+                                // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
+                                shifts = ["早班", "收班", "洗碗"];
+                            }
+                            
+                            // 平均分配班別給可用的工讀生
+                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                                workerWorkDays[a.username] - workerWorkDays[b.username]
+                            );
+                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                            
+                            for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
+                                const worker = sortedWorkers[i];
+                                const shift = shuffledShifts[i];
+                                
+                                // 檢查衝突：洗碗和收班不能是同一個人
+                                const hasConflict = daySchedule.some(existing => 
+                                    existing.username === worker.username && 
+                                    ((existing.shift === "洗碗" && shift === "收班") || 
+                                     (existing.shift === "收班" && shift === "洗碗"))
+                                );
+                                
+                                if (!hasConflict) {
+                                    daySchedule.push({
+                                        username: worker.username,
+                                        role: "外場工讀生",
+                                        shift: shift
+                                    });
+                                    workerWorkDays[worker.username]++;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (daySchedule.length > 0) {
+                        newSchedule[dateString] = daySchedule;
+                    }
+                }
+                
+                // 更新排班資料
+                await this.scheduleManager.updateOutsideSchedule(newSchedule);
+                this.uiManager.showToast('外場排班已生成！');
             }
 
             async handleCoverShiftAction(e) {
@@ -1140,12 +1622,25 @@
 
                 if (this.FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === this.ADMIN_ROLE) {
                     this.uiManager.showCalendarView();
-                    this.uiManager.updateAppSubtitle(currentUserData.role === this.ADMIN_ROLE ? "團隊排班總覽" : "請在下方月曆選擇您的休假日。");
-                    this.renderFullTimeView();
+                    if (currentUserData.role === this.ADMIN_ROLE) {
+                        this.uiManager.updateAppSubtitle("團隊排班總覽");
+                        this.renderAdminView();
+                    } else {
+                        this.uiManager.updateAppSubtitle("請在下方月曆選擇您的休假日。");
+                        this.renderFullTimeView();
+                    }
                 } else if (currentUserData.role === this.PART_TIMER_ROLE) {
                     this.uiManager.showCalendarView();
                     this.uiManager.updateAppSubtitle("請從左方列表選擇您要代班的時段。");
                     this.renderPartTimerView();
+                } else if (this.OUTSIDE_ROLES.includes(currentUserData.role)) {
+                    this.uiManager.showCalendarView();
+                    if (currentUserData.role === "外場櫃檯") {
+                        this.uiManager.updateAppSubtitle("請在下方月曆選擇您的休假日 (每月最多4天)。");
+                    } else {
+                        this.uiManager.updateAppSubtitle("請在下方月曆標示您不能上班的日子。");
+                    }
+                    this.renderOutsideView();
                 }
             }
 
@@ -1249,6 +1744,151 @@
                 await this.renderFullCalendar();
             }
             
+            async renderAdminView() {
+                this.uiManager.calendarView.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-center mb-6">
+                            <div class="bg-gray-100 rounded-lg p-1">
+                                <button id="inside-calendar-btn" class="px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold">内場月曆</button>
+                                <button id="outside-calendar-btn" class="px-4 py-2 rounded-md text-gray-600 hover:bg-gray-200">外場月曆</button>
+                            </div>
+                        </div>
+                        <div id="calendar-header" class="flex items-center justify-between mb-4">
+                            <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_left</span></button>
+                            <h2 id="calendar-month-year" class="text-xl font-bold"></h2>
+                            <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_right</span></button>
+                        </div>
+                        <div id="calendar-weekdays" class="custom-calendar-grid gap-1 sm:gap-2 text-center text-xs sm:text-sm font-semibold text-gray-600 mb-2">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="calendar-grid" class="custom-calendar-grid gap-1 sm:gap-2"></div>
+                        <div id="admin-assignment-panel" class="mt-8 p-4 sm:p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4 text-indigo-800">手動新增排班</h3>
+                            <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                <input type="date" id="assignment-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                <input type="text" id="assignment-user" placeholder="輸入姓名" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="" disabled selected>選擇班別</option>
+                                    <option value="備菜班 (早)">備菜班 (早)</option>
+                                    <option value="備菜班 (晚)">備菜班 (晚)</option>
+                                    <option value="備菜班 (全日)">備菜班 (全日)</option>
+                                    <option value="炸爐班 (早)">炸爐班 (早)</option>
+                                    <option value="炸爐班 (晚)">炸爐班 (晚)</option>
+                                    <option value="炸爐班 (全日)">炸爐班 (全日)</option>
+                                    <option value="收班">收班</option>
+                                </select>
+                                <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
+                            </form>
+                        </div>
+                        <div id="outside-schedule-panel" class="mt-4 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4 text-green-800">外場排班管理</h3>
+                            <div class="flex flex-col sm:flex-row gap-4 items-center mb-4">
+                                <button id="generate-outside-schedule-btn" class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">
+                                    生成外場排班
+                                </button>
+                                <p class="text-sm text-green-700">系統會根據櫃檯休假和工讀生不可上班日自動排班</p>
+                            </div>
+                            <div id="worker-availability-panel" class="mt-4">
+                                <h4 class="text-md font-semibold mb-3 text-green-800">工讀生可上班設定</h4>
+                                <div id="worker-checkboxes" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    </div>
+                            </div>
+                        </div>
+                        <p class="text-center text-sm text-gray-500 mt-4">點擊日期以設定或取消該日為全體公休日。</p>
+                    </div>
+                `;
+                
+                // 設置切換按鈕事件
+                document.getElementById('inside-calendar-btn').addEventListener('click', () => {
+                    this.currentCalendarView = 'inside';
+                    this.updateCalendarToggleButtons();
+                    this.renderFullCalendar();
+                });
+                
+                document.getElementById('outside-calendar-btn').addEventListener('click', () => {
+                    this.currentCalendarView = 'outside';
+                    this.updateCalendarToggleButtons();
+                    this.renderOutsideCalendar();
+                });
+                
+                document.getElementById('generate-outside-schedule-btn').addEventListener('click', async () => {
+                    const month = this.calendarManager.getMonth() + 1;
+                    const year = this.calendarManager.getYear();
+                    const today = new Date();
+                    const currentDay = today.getDate();
+                    
+                    // 根據當前日期決定排班範圍
+                    if (currentDay >= 25) {
+                        // 25號之後排下個月的1-15號
+                        const nextMonth = month === 12 ? 1 : month + 1;
+                        const nextYear = month === 12 ? year + 1 : year;
+                        await this.generateOutsideSchedule(nextYear, nextMonth, 1, 15);
+                        this.uiManager.showToast('已排下個月1-15號的班表');
+                    } else if (currentDay >= 10) {
+                        // 10號之後排當月的16-31號
+                        await this.generateOutsideSchedule(year, month, 16);
+                        this.uiManager.showToast('已排本月16-31號的班表');
+                    } else {
+                        // 其他時間排整個月
+                        await this.generateOutsideSchedule(year, month);
+                        this.uiManager.showToast('已排整個月的班表');
+                    }
+                    
+                    this.renderOutsideCalendar();
+                });
+                
+                // 初始化為內場月曆
+                this.currentCalendarView = 'inside';
+                this.updateCalendarToggleButtons();
+                await this.renderFullCalendar();
+                
+                // 生成工讀生勾選框
+                this.generateWorkerCheckboxes();
+            }
+
+            updateCalendarToggleButtons() {
+                const insideBtn = document.getElementById('inside-calendar-btn');
+                const outsideBtn = document.getElementById('outside-calendar-btn');
+                
+                if (this.currentCalendarView === 'inside') {
+                    insideBtn.className = 'px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold';
+                    outsideBtn.className = 'px-4 py-2 rounded-md text-gray-600 hover:bg-gray-200';
+                } else {
+                    insideBtn.className = 'px-4 py-2 rounded-md text-gray-600 hover:bg-gray-200';
+                    outsideBtn.className = 'px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold';
+                }
+            }
+
+            generateWorkerCheckboxes() {
+                const workerCheckboxesContainer = document.getElementById('worker-checkboxes');
+                if (!workerCheckboxesContainer) return;
+                
+                const allUsers = this.scheduleManager.getAllUsers();
+                const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
+                
+                workerCheckboxesContainer.innerHTML = '';
+                
+                outsideWorkers.forEach(worker => {
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'flex items-center space-x-2 p-2 bg-white rounded border';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `worker-${worker.id}`;
+                    checkbox.className = 'rounded border-gray-300 text-green-600 focus:ring-green-500';
+                    checkbox.checked = true; // 預設為可上班
+                    
+                    const label = document.createElement('label');
+                    label.htmlFor = `worker-${worker.id}`;
+                    label.className = 'text-sm font-medium text-gray-700';
+                    label.textContent = worker.username;
+                    
+                    checkboxDiv.appendChild(checkbox);
+                    checkboxDiv.appendChild(label);
+                    workerCheckboxesContainer.appendChild(checkboxDiv);
+                });
+            }
+
             async renderFullTimeView() {
                 this.uiManager.calendarView.innerHTML = `
                     <div>
@@ -1292,6 +1932,33 @@
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
                 }
                 await this.renderFullCalendar();
+            }
+
+            async renderOutsideView() {
+                this.uiManager.calendarView.innerHTML = `
+                    <div>
+                        <div id="calendar-header" class="flex items-center justify-between mb-4">
+                            <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_left</span></button>
+                            <h2 id="calendar-month-year" class="text-xl font-bold"></h2>
+                            <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_right</span></button>
+                        </div>
+                        <div id="calendar-weekdays" class="custom-calendar-grid gap-1 sm:gap-2 text-center text-xs sm:text-sm font-semibold text-gray-600 mb-2">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="calendar-grid" class="custom-calendar-grid gap-1 sm:gap-2"></div>
+                        <p class="text-center text-sm text-gray-500 mt-4"></p>
+                    </div>
+                `;
+                
+                const instructions = this.uiManager.calendarView.querySelector('p');
+                const currentUserData = this.authManager.getCurrentUserData();
+                if (currentUserData.role === "外場櫃檯") {
+                    instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
+                } else {
+                    instructions.textContent = "請點擊日期標示您不能上班的日子。";
+                }
+                
+                await this.renderOutsideCalendar();
             }
 
             async renderFullCalendar() {
@@ -1526,6 +2193,202 @@
                     calendarGrid.appendChild(day);
                 }
             }
+
+            async renderOutsideCalendar() {
+                this.calendarManager.getCalendarDate().setDate(1);
+                const month = this.calendarManager.getMonth();
+                const year = this.calendarManager.getYear();
+                
+                document.getElementById('calendar-month-year').textContent = `${year}年 ${month + 1}月`;
+                
+                const holidays = await this.calendarManager.fetchHolidays(year);
+                const allData = this.scheduleManager.getAllData();
+                const { userVacations = {}, adminHolidays = [], userAvailability = {}, outsideSchedule = {} } = allData;
+
+                const dailySchedule = {};
+                const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+
+                for (let i = 1; i <= lastDayOfMonth; i++) {
+                    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    dailySchedule[dateString] = [];
+                }
+
+                // 處理外場排班資料
+                Object.keys(outsideSchedule).forEach(dateString => {
+                    if (dailySchedule[dateString]) {
+                        const assignments = outsideSchedule[dateString];
+                        assignments.forEach(assignment => {
+                            dailySchedule[dateString].push({
+                                username: assignment.username,
+                                role: assignment.role,
+                                shift: assignment.shift
+                            });
+                        });
+                    }
+                });
+
+                // 添加櫃檯人員的正常上班（非休假日期）
+                const allUsers = this.scheduleManager.getAllUsers();
+                const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
+                
+                counterStaff.forEach(staff => {
+                    const vacationKey = `${staff.id}-${year}-${month + 1}`;
+                    const monthlyVacations = userVacations[vacationKey] || [];
+                    
+                    for (let i = 1; i <= lastDayOfMonth; i++) {
+                        const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                        const date = new Date(year, month, i);
+                        const dayOfWeek = date.getDay();
+                        
+                        // 跳過星期四（公休日）和櫃檯休假日期
+                        if (dayOfWeek === 4 || monthlyVacations.includes(dateString)) continue;
+                        
+                        // 檢查是否已經有櫃檯排班
+                        const hasCounter = dailySchedule[dateString]?.some(s => s.role === "外場櫃檯");
+                        if (!hasCounter) {
+                            if (!dailySchedule[dateString]) dailySchedule[dateString] = [];
+                            dailySchedule[dateString].push({
+                                username: staff.username,
+                                role: "外場櫃檯",
+                                shift: "櫃檯"
+                            });
+                        }
+                    }
+                });
+
+                const calendarGrid = document.getElementById('calendar-grid');
+                calendarGrid.innerHTML = '';
+                const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
+                const prevLastDay = new Date(year, month, 0).getDate();
+                for (let i = firstDayIndex; i > 0; i--) {
+                    calendarGrid.innerHTML += `<div class="p-1 sm:p-2 text-center text-gray-300 no-hover">${prevLastDay - i + 1}</div>`;
+                }
+
+                const todayString = new Date().toISOString().split('T')[0];
+                const currentUserData = this.authManager.getCurrentUserData();
+
+                for (let i = 1; i <= lastDayOfMonth; i++) {
+                    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    const day = document.createElement('div');
+                    const isThursday = new Date(year, month, i).getDay() === 4;
+                    const holidayName = holidays.get(dateString);
+                    const isAdminHoliday = adminHolidays.includes(dateString);
+
+                    day.className = `calendar-day p-1 rounded-lg text-left text-[10px] sm:text-xs`;
+                    day.dataset.date = dateString;
+
+                    if (isThursday || isAdminHoliday) {
+                        day.classList.add('bg-red-100');
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800">${i}</span></div><div class="flex-grow flex items-center justify-center"><p class="font-bold text-red-700 text-xs sm:text-sm">公休日</p></div>`;
+                    } else {
+                        if(holidayName) day.classList.add('bg-yellow-100');
+                        
+                        if (this.OUTSIDE_ROLES.includes(currentUserData.role)) {
+                            day.classList.add('cursor-pointer');
+                        }
+
+                        const workingUsers = dailySchedule[dateString] || [];
+                        let usersHtml = '<div class="flex-grow"></div>';
+                        if (workingUsers.length > 0) {
+                            
+                            // ======================= START: MODIFIED BLOCK =======================
+                            // 按照指定順序排序
+                            const getSortOrder = (workInfo) => {
+                                const { role, shift } = workInfo;
+                                
+                                if (role === "外場櫃檯") {
+                                    return 1; // 櫃檯
+                                } else if (role === "外場工讀生") {
+                                    switch (shift) {
+                                        case "早櫃": return 2;
+                                        case "早班": return 3;
+                                        case "晚櫃": return 4;
+                                        case "洗碗": return 5;
+                                        case "收班": return 6;
+                                        case "櫃檯": return 1; // 備用，以防工讀生被手動排為'櫃檯'
+                                    }
+                                }
+                                return 99; // 其他
+                            };
+                            // ======================= END: MODIFIED BLOCK =======================
+                            
+                            workingUsers.sort((a, b) => getSortOrder(a) - getSortOrder(b));
+                            
+                            const userListHtml = workingUsers.map(workInfo => {
+                                const { username, role, shift } = workInfo;
+                                let displayLabel = '';
+                                let colorClass = '';
+                                
+                                if (role === "外場櫃檯") {
+                                    displayLabel = '(櫃)';
+                                    colorClass = 'font-semibold text-purple-800';
+                                } else if (role === "外場工讀生") {
+                                    if (shift === "早櫃") {
+                                        displayLabel = '(早櫃)';
+                                        colorClass = 'font-semibold text-purple-600';
+                                    } else if (shift === "晚櫃") {
+                                        displayLabel = '(晚櫃)';
+                                        colorClass = 'font-semibold text-purple-600';
+                                    } else if (shift === "早班") {
+                                        displayLabel = '(早)';
+                                        colorClass = 'font-semibold text-blue-800';
+                                    } else if (shift === "收班") {
+                                        displayLabel = '(收)';
+                                        colorClass = 'font-semibold text-green-800';
+                                    } else if (shift === "洗碗") {
+                                        displayLabel = '(洗)';
+                                        colorClass = 'font-semibold text-orange-800';
+                                    } else if (shift === "櫃檯") {
+                                        displayLabel = '(櫃)';
+                                        colorClass = 'font-semibold text-purple-800';
+                                    }
+                                }
+
+                                return `<div class="flex items-center justify-between w-full">
+                                            <span class="${colorClass}">${username}${displayLabel}</span>
+                                        </div>`;
+                            }).join('');
+                            usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml}</div>`;
+                        }
+                        
+                        let selfStatusHtml = '';
+                        if (currentUserData.role === "外場櫃檯") {
+                            const vacationKey = `${this.authManager.getCurrentUser().uid}-${year}-${month+1}`;
+                            const isVacation = (userVacations[vacationKey] || []).includes(dateString);
+                            if (isVacation) {
+                                day.classList.add('bg-red-100', 'border', 'border-red-400');
+                                selfStatusHtml = `<p class="font-semibold text-red-700">休假</p>`;
+                            } else {
+                                if(!holidayName) day.classList.add('bg-green-100');
+                                day.classList.add('border', 'border-green-400');
+                                selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
+                            }
+                        } else if (currentUserData.role === "外場工讀生") {
+                            const availabilityKey = `${this.authManager.getCurrentUser().uid}-${year}-${month+1}`;
+                            const isUnavailable = (userAvailability[availabilityKey] || []).includes(dateString);
+                            const isWorking = workingUsers.some(w => w.username === currentUserData.username);
+
+                            if (isUnavailable) {
+                                if(!holidayName) day.classList.add('bg-red-100');
+                                day.classList.add('border', 'border-red-400');
+                                selfStatusHtml = `<p class="font-semibold text-red-700">不上班</p>`;
+                            } else if (isWorking) {
+                                if(!holidayName) day.classList.add('bg-blue-100');
+                                day.classList.add('border', 'border-blue-400');
+                                selfStatusHtml = `<p class="font-semibold text-blue-700">上班</p>`;
+                            } else {
+                                if(!holidayName) day.classList.add('bg-white');
+                                selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
+                            }
+                        }
+
+                        day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
+                    }
+                    
+                    if (dateString === todayString) day.classList.add('today');
+                    calendarGrid.appendChild(day);
+                }
+            }
             
             setupEventListeners() {
                 this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
@@ -1574,12 +2437,28 @@
                     }
                     if (e.target.closest('#prev-month-btn')) {
                         this.calendarManager.previousMonth();
-                        this.renderAppView();
+                        if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
+                            if (this.currentCalendarView === 'inside') {
+                                this.renderFullCalendar();
+                            } else {
+                                this.renderOutsideCalendar();
+                            }
+                        } else {
+                            this.renderAppView();
+                        }
                         return;
                     }
                     if (e.target.closest('#next-month-btn')) {
                         this.calendarManager.nextMonth();
-                        this.renderAppView();
+                        if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
+                            if (this.currentCalendarView === 'inside') {
+                                this.renderFullCalendar();
+                            } else {
+                                this.renderOutsideCalendar();
+                            }
+                        } else {
+                            this.renderAppView();
+                        }
                         return;
                     }
                     if (e.target.closest('.calendar-day')) {
@@ -1638,4 +2517,3 @@
     </script>
 </body>
 </html>
-
