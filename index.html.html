@@ -63,6 +63,15 @@
             /* 日     一     二     三     四     五     六 */
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
         }
+        
+        /* === 新增這個樣式 === */
+        #cover-shift-modal.hidden {
+            display: none;
+        }
+        #cover-shift-modal:not(.hidden) {
+            display: flex;
+        }
+        /* === 樣式結束 === */
     </style>
 </head>
 <body class="antialiased text-gray-800">
@@ -161,8 +170,27 @@
             </div>
         </div>
 
-
-
+        <div id="cover-shift-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">指定代班</h2>
+                    <button id="close-cover-shift-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <form id="cover-shift-form">
+                    <p id="cover-shift-info" class="text-center text-gray-700 mb-4">
+                        </p>
+                    <div class="space-y-4">
+                        <label for="cover-shift-replacement-select" class="block text-sm font-medium text-gray-700">請選擇代班人員：</label>
+                        <select id="cover-shift-replacement-select" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                            <option value="" disabled selected>選擇一位外場工讀生</option>
+                            </select>
+                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">確認換班</button>
+                    </div>
+                </form>
+            </div>
+        </div>
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
         </div>
@@ -602,6 +630,14 @@
                 this.changeUsernameForm = document.getElementById('change-username-form');
                 this.passwordSettingsError = document.getElementById('password-settings-error');
                 this.usernameSettingsError = document.getElementById('username-settings-error');
+
+                // === 新增這些行 ===
+                this.coverShiftModal = document.getElementById('cover-shift-modal');
+                this.closeCoverShiftBtn = document.getElementById('close-cover-shift-btn');
+                this.coverShiftForm = document.getElementById('cover-shift-form');
+                this.coverShiftInfo = document.getElementById('cover-shift-info');
+                this.coverShiftSelect = document.getElementById('cover-shift-replacement-select');
+                // === 新增結束 ===
             }
 
             showToast(message) {
@@ -648,6 +684,33 @@
             hideSettingsModal() {
                 this.settingsModal.classList.add('hidden');
             }
+
+            // === 新增這兩個函式 ===
+            showCoverShiftModal(date, shift, replacementOptions) {
+                // 儲存資訊，以便表單提交時使用
+                this.coverShiftForm.dataset.date = date;
+                this.coverShiftForm.dataset.shift = shift;
+
+                // 顯示班次資訊
+                this.coverShiftInfo.textContent = `您在 ${date} 的 (${shift}) 班，要找誰代班？`;
+
+                // 清空並填充下拉選單
+                this.coverShiftSelect.innerHTML = '<option value="" disabled selected>選擇一位外場工讀生</option>';
+                replacementOptions.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.username;
+                    this.coverShiftSelect.appendChild(option);
+                });
+
+                this.coverShiftModal.classList.remove('hidden');
+            }
+
+            hideCoverShiftModal() {
+                this.coverShiftModal.classList.add('hidden');
+                this.coverShiftForm.reset();
+            }
+            // === 新增結束 ===
 
             updateUserInfo(username, role) {
                 this.userNameSpan.textContent = username;
@@ -1176,18 +1239,107 @@
                     }
                     
                     await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
+                
+                // =======================
+                // === 修改這個區塊 ===
+                // =======================
                 } else if (currentUserData.role === "外場工讀生") {
-                    // 外場工讀生選擇不上班的日子
-                    const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                    
                     const allData = this.scheduleManager.getAllData();
-                    const currentUnavailability = allData.userAvailability?.[availabilityKey] || [];
-                    const newUnavailability = currentUnavailability.includes(clickedDateStr)
-                        ? currentUnavailability.filter(d => d !== clickedDateStr)
-                        : [...currentUnavailability, clickedDateStr];
+                    const { outsideSchedule = {}, userAvailability = {} } = allData;
+                    
+                    // 檢查當天是否被排班
+                    const myShifts = (outsideSchedule[clickedDateStr] || []).filter(
+                        s => s.username === currentUserData.username
+                    );
+
+                    if (myShifts.length > 0) {
+                        // === 情境1: 使用者有被排班，顯示代班 Modal ===
+                        const allUsers = this.scheduleManager.getAllUsers();
+                        const replacementOptions = allUsers.filter(u => 
+                            u.role === "外場工讀生" && u.id !== this.authManager.getCurrentUser().uid
+                        );
                         
-                    await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
+                        // 簡單起見，我們先處理當天的第一個班次
+                        // (如果未來一個人一天可能有多個班次，這裡需要改成讓使用者選擇)
+                        const shiftToCover = myShifts[0].shift;
+
+                        this.uiManager.showCoverShiftModal(clickedDateStr, shiftToCover, replacementOptions);
+
+                    } else {
+                        // === 情境2: 使用者沒有被排班，執行原有的「標記不上班」邏輯 ===
+                        const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
+                        const currentUnavailability = userAvailability?.[availabilityKey] || [];
+                        const newUnavailability = currentUnavailability.includes(clickedDateStr)
+                            ? currentUnavailability.filter(d => d !== clickedDateStr)
+                            : [...currentUnavailability, clickedDateStr];
+                            
+                        await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
+                    }
+                }
+                // =======================
+                // === 修改結束 ===
+                // =======================
+            }
+
+            // === 新增這個函式 ===
+            async handleAssignCoverShift(e) {
+                e.preventDefault();
+                
+                // 從表單的 dataset 獲取資訊
+                const date = this.uiManager.coverShiftForm.dataset.date;
+                const shift = this.uiManager.coverShiftForm.dataset.shift;
+                
+                // 獲取選擇的代班人員
+                const replacementUserId = this.uiManager.coverShiftSelect.value;
+                if (!replacementUserId) {
+                    return this.uiManager.showToast("請選擇一位代班人員");
+                }
+                
+                const replacementUser = this.scheduleManager.getAllUsers().find(u => u.id === replacementUserId);
+                if (!replacementUser) {
+                    return this.uiManager.showToast("代班人員資料錯誤");
+                }
+
+                this.uiManager.showToast("正在處理換班...");
+
+                try {
+                    // 這是關鍵的 Read-Modify-Write 邏輯
+                    const allData = this.scheduleManager.getAllData();
+                    // 深度複製一份排班表，避免修改到當前狀態
+                    const newOutsideSchedule = JSON.parse(JSON.stringify(allData.outsideSchedule || {}));
+                    
+                    const daySchedule = newOutsideSchedule[date];
+                    if (!daySchedule) {
+                        throw new Error("找不到當天的排班資料");
+                    }
+                    
+                    // 找到使用者原有的班次
+                    const originalShiftIndex = daySchedule.findIndex(s => 
+                        s.username === this.authManager.getCurrentUserData().username && 
+                        s.shift === shift
+                    );
+                    
+                    if (originalShiftIndex === -1) {
+                        throw new Error("找不到您原有的班次，可能已被更動");
+                    }
+                    
+                    // === 執行換班 ===
+                    // 將該班次的 username 換成代班人的 username
+                    daySchedule[originalShiftIndex].username = replacementUser.username;
+                    
+                    // 將修改後的排班表寫回資料庫
+                    await this.scheduleManager.updateOutsideSchedule(newOutsideSchedule);
+                    
+                    this.uiManager.showToast("換班成功！");
+                    this.uiManager.hideCoverShiftModal();
+
+                } catch (error) {
+                    console.error("換班失敗:", error);
+                    this.uiManager.showToast(`換班失敗：${error.message}`);
                 }
             }
+            // === 新增結束 ===
 
             // 外場排班系統
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
@@ -2416,6 +2568,15 @@
                 });
                 this.uiManager.changePasswordForm.addEventListener('submit', (e) => this.handleChangePassword(e));
                 this.uiManager.changeUsernameForm.addEventListener('submit', (e) => this.handleChangeUsername(e));
+
+                // === 新增這些行 ===
+                this.uiManager.closeCoverShiftBtn.addEventListener('click', () => {
+                    this.uiManager.hideCoverShiftModal();
+                });
+                this.uiManager.coverShiftForm.addEventListener('submit', (e) => {
+                    this.handleAssignCoverShift(e);
+                });
+                // === 新增結束 ===
 
                 this.uiManager.calendarView.addEventListener('click', async (e) => {
                     // 先處理細粒度按鈕，避免被日期點擊邏輯攔截
