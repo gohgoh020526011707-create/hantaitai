@@ -1319,9 +1319,6 @@
                     
                     await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
                 
-                // =======================
-                // === (MODIFIED) Block (No change here, logic is correct) ===
-                // =======================
                 } else if (currentUserData.role === "外場工讀生") {
                     
                     const allData = this.scheduleManager.getAllData();
@@ -1356,11 +1353,7 @@
                             
                         await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
                     }
-                    // --- END NEW LOGIC ---
                 }
-                // =======================
-                // === End Modified Block ===
-                // =======================
             }
 
             // 處理班次選擇的函式
@@ -1377,7 +1370,9 @@
                 this.uiManager.showCoverShiftModal(date, shift, replacementOptions);
             }
 
-            // 處理代班人指派的函式
+            // =======================
+            // === (MODIFIED) 處理代班人指派 (handleAssignCoverShift) ===
+            // =======================
             async handleAssignCoverShift(e) {
                 e.preventDefault();
                 
@@ -1426,12 +1421,22 @@
                     // 將修改後的排班表寫回資料庫
                     await this.scheduleManager.updateOutsideSchedule(newOutsideSchedule);
                     
+                    // (NEW) 1. 手動更新本地端的資料快取 (Client-side prediction)
+                    // 這樣 renderOutsideCalendar() 才能抓到最新的資料，而不需等待 onSnapshot
+                    this.scheduleManager.allData.outsideSchedule = newOutsideSchedule;
+
                     this.uiManager.showToast("換班成功！");
                     this.uiManager.hideCoverShiftModal();
+
+                    // (NEW) 2. 手動觸發日曆刷新
+                    // 因為本地資料已更新，這次刷新將會顯示正確的新班表
+                    await this.renderOutsideCalendar();
 
                 } catch (error) {
                     console.error("換班失敗:", error);
                     this.uiManager.showToast(`換班失敗：${error.message}`);
+                    // (MODIFIED) 確保失敗時也會關閉 modal
+                    this.uiManager.hideCoverShiftModal();
                 }
             }
             
@@ -1786,7 +1791,7 @@
                 }
 
                 console.log('取消代班前:', currentCoverSignups);
-                console.log('取消代B後:', newCoverSignups);
+                console.log('取消代班後:', newCoverSignups);
                 
                 try {
                     await this.scheduleManager.updateMultiple({
