@@ -525,7 +525,8 @@
                             coverSignups: {},
                             adminHolidays: [],
                             manualAssignments: {},
-                            outsideSchedule: {}
+                            outsideSchedule: {},
+                            outsideWorkerPreferences: {} // (NEW) 初始化外場工讀生偏好設定
                         });
                     }
                     // 觸發重新渲染
@@ -581,7 +582,7 @@
                 try {
                     // 獲取當前所有資料
                     const currentData = this.allData;
-                    // 更新 coverSignups 並保持其他資料不變
+                    // 更新 coverSignups 並保持 other data 不變
                     const updatedData = { ...currentData, coverSignups: signups };
                     
                     console.log('更新代班資料到資料庫:', updatedData.coverSignups);
@@ -601,6 +602,11 @@
 
             async updateOutsideSchedule(schedule) {
                 await setDoc(doc(this.db, "scheduleData", "main"), { outsideSchedule: schedule }, { merge: true });
+            }
+            
+            // (NEW) 新增一個方法來更新外場工讀生偏好設定
+            async updateOutsideWorkerPreferences(preferences) {
+                await setDoc(doc(this.db, "scheduleData", "main"), { outsideWorkerPreferences: preferences }, { merge: true });
             }
 
             async updateMultiple(fields) {
@@ -936,11 +942,14 @@
                 }
             }
 
-            // 專門用於自動排班的方法，不依賴勾選框狀態
+            // =======================
+            // === (MODIFIED) 自動排班邏輯 (generateOutsideScheduleAuto) ===
+            // =======================
             async generateOutsideScheduleAuto(year, month, startDay = 1, endDay = null) {
                 const allUsers = this.scheduleManager.getAllUsers();
                 const allData = this.scheduleManager.getAllData();
-                const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
+                // (MODIFIED) 取得工讀生偏好設定
+                const { userVacations = {}, userAvailability = {}, outsideSchedule = {}, outsideWorkerPreferences = {} } = allData;
                 
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
@@ -991,17 +1000,24 @@
                     const counterVacation = counterVacations.find(cv => cv.date === dateString);
                     
                     if (counterVacation) {
-                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
-                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
+                        // === 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班 ===
                         
-                        if (dayAvailableWorkers.length > 0) {
+                        // (MODIFIED) 篩選可以上櫃檯休假班的工讀生
+                        const dayAvailableWorkers_CounterCover = outsideWorkers.filter(worker => {
+                            // 檢查 1: 該工讀生是否被允許上櫃檯休假班
+                            const canCover = outsideWorkerPreferences[worker.id]?.canCoverCounter || false;
+                            // 檢查 2: 該工讀生當天是否標記不上班
+                            const isUnavailable = (workerUnavailability[worker.username] || []).includes(dateString);
+                            
+                            return canCover && !isUnavailable;
+                        });
+                        
+                        if (dayAvailableWorkers_CounterCover.length > 0) {
                             // 總共5個班別
                             const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
                             
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            // (MODIFIED) 使用篩選後的工讀生列表
+                            const sortedWorkers = dayAvailableWorkers_CounterCover.sort((a, b) => 
                                 workerWorkDays[a.username] - workerWorkDays[b.username]
                             );
                             // 打亂班別以隨機分配
@@ -1056,12 +1072,17 @@
                             }
                         }
                     } else {
-                        // 正常排班
-                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
+                        // === 正常排班 (櫃檯未休假) ===
                         
-                        if (dayAvailableWorkers.length > 0) {
+                        // (MODIFIED) 篩選所有當天可上班的工讀生 (忽略櫃檯休假班設定)
+                        const dayAvailableWorkers_Normal = outsideWorkers.filter(worker => {
+                            // 檢查 1: 該工讀生當天是否標記不上班
+                            const isUnavailable = (workerUnavailability[worker.username] || []).includes(dateString);
+                            
+                            return !isUnavailable;
+                        });
+                        
+                        if (dayAvailableWorkers_Normal.length > 0) {
                             // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
                             let shifts = [];
                             if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -1072,8 +1093,8 @@
                                 shifts = ["早班", "收班", "洗碗"];
                             }
                             
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            // (MODIFIED) 使用篩選後的工讀生列表
+                            const sortedWorkers = dayAvailableWorkers_Normal.sort((a, b) => 
                                 workerWorkDays[a.username] - workerWorkDays[b.username]
                             );
                             const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
@@ -1299,7 +1320,7 @@
                     await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
                 
                 // =======================
-                // === (MODIFIED) Block ===
+                // === (MODIFIED) Block (No change here, logic is correct) ===
                 // =======================
                 } else if (currentUserData.role === "外場工讀生") {
                     
@@ -1414,22 +1435,21 @@
                 }
             }
             
-            // 外場排班系統 (Generator - 無變動)
+            // =======================
+            // === (MODIFIED) 手動排班邏輯 (generateOutsideSchedule) ===
+            // =======================
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
                 const allUsers = this.scheduleManager.getAllUsers();
                 const allData = this.scheduleManager.getAllData();
-                const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
+                // (MODIFIED) 取得工讀生偏好設定
+                const { userVacations = {}, userAvailability = {}, outsideSchedule = {}, outsideWorkerPreferences = {} } = allData;
                 
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
                 
-                // 獲取勾選框狀態，只排有勾選的工讀生
-                const availableWorkers = outsideWorkers.filter(worker => {
-                    const checkbox = document.getElementById(`worker-${worker.id}`);
-                    return checkbox ? checkbox.checked : true;
-                });
+                // (REMOVED) 舊的勾選框過濾邏輯
                 
-                if (availableWorkers.length === 0) {
+                if (outsideWorkers.length === 0) {
                     this.uiManager.showToast('沒有外場工讀生可以排班');
                     return;
                 }
@@ -1450,14 +1470,16 @@
                 
                 // 獲取工讀生不可上班日期
                 const workerUnavailability = {};
-                availableWorkers.forEach(worker => {
+                // (MODIFIED) 遍歷所有外場工讀生
+                outsideWorkers.forEach(worker => {
                     const availabilityKey = `${worker.id}-${year}-${month}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
                 });
                 
                 // 計算每個工讀生的工作天數
                 const workerWorkDays = {};
-                availableWorkers.forEach(worker => {
+                // (MODIFIED) 遍歷所有外場工讀生
+                outsideWorkers.forEach(worker => {
                     workerWorkDays[worker.username] = 0;
                 });
                 
@@ -1475,17 +1497,24 @@
                     const counterVacation = counterVacations.find(cv => cv.date === dateString);
                     
                     if (counterVacation) {
-                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
-                        const dayAvailableWorkers = availableWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
+                        // === 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班 ===
                         
-                        if (dayAvailableWorkers.length > 0) {
+                        // (MODIFIED) 篩選可以上櫃檯休假班的工讀生
+                        const dayAvailableWorkers_CounterCover = outsideWorkers.filter(worker => {
+                            // 檢查 1: 該工讀生是否被允許上櫃檯休假班 (從新的偏好設定讀取)
+                            const canCover = outsideWorkerPreferences[worker.id]?.canCoverCounter || false;
+                            // 檢查 2: 該工讀生當天是否標記不上班
+                            const isUnavailable = (workerUnavailability[worker.username] || []).includes(dateString);
+                            
+                            return canCover && !isUnavailable;
+                        });
+                        
+                        if (dayAvailableWorkers_CounterCover.length > 0) {
                             // 總共5個班別
                             const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
                             
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            // (MODIFIED) 使用篩選後的工讀生列表
+                            const sortedWorkers = dayAvailableWorkers_CounterCover.sort((a, b) => 
                                 workerWorkDays[a.username] - workerWorkDays[b.username]
                             );
                             // 打亂班別以隨機分配
@@ -1540,12 +1569,17 @@
                             }
                         }
                     } else {
-                        // 正常排班
-                        const dayAvailableWorkers = availableWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
+                        // === 正常排班 (櫃檯未休假) ===
                         
-                        if (dayAvailableWorkers.length > 0) {
+                        // (MODIFIED) 篩選所有當天可上班的工讀生 (忽略櫃檯休假班設定)
+                        const dayAvailableWorkers_Normal = outsideWorkers.filter(worker => {
+                            // 檢查 1: 該工讀生當天是否標記不上班
+                            const isUnavailable = (workerUnavailability[worker.username] || []).includes(dateString);
+                            
+                            return !isUnavailable;
+                        });
+                        
+                        if (dayAvailableWorkers_Normal.length > 0) {
                             // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
                             let shifts = [];
                             if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -1556,8 +1590,8 @@
                                 shifts = ["早班", "收班", "洗碗"];
                             }
                             
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            // (MODIFIED) 使用篩選後的工讀生列表
+                            const sortedWorkers = dayAvailableWorkers_Normal.sort((a, b) => 
                                 workerWorkDays[a.username] - workerWorkDays[b.username]
                             );
                             const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
@@ -1752,7 +1786,7 @@
                 }
 
                 console.log('取消代班前:', currentCoverSignups);
-                console.log('取消代班後:', newCoverSignups);
+                console.log('取消代B後:', newCoverSignups);
                 
                 try {
                     await this.scheduleManager.updateMultiple({
@@ -1908,7 +1942,9 @@
                 await this.renderFullCalendar();
             }
             
-            // 管理員視圖 (無變動)
+            // =======================
+            // === (MODIFIED) 管理員視圖 (renderAdminView) ===
+            // =======================
             async renderAdminView() {
                 this.uiManager.calendarView.innerHTML = `
                     <div>
@@ -1944,10 +1980,10 @@
                                 <button id="generate-outside-schedule-btn" class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">
                                     生成外場排班
                                 </button>
-                                <p class="text-sm text-green-700">系統會根據櫃檯休假和工讀生不可上班日自動排班</p>
+                                <p class="text-sm text-green-700">系統會根據櫃檯休假和工讀生偏好自動排班</p>
                             </div>
                             <div id="worker-availability-panel" class="mt-4">
-                                <h4 class="text-md font-semibold mb-3 text-green-800">工讀生可上班設定</h4>
+                                <h4 class="text-md font-semibold mb-3 text-green-800">工讀生可上外場櫃檯休假班設定</h4>
                                 <div id="worker-checkboxes" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                     </div>
                             </div>
@@ -1996,7 +2032,7 @@
                 this.updateCalendarToggleButtons(); // Initial dropdown population
                 await this.renderFullCalendar();
                 
-                // 生成工讀生勾選框
+                // (MODIFIED) 生成工讀生勾選框 (現在會綁定事件)
                 this.generateWorkerCheckboxes();
             }
 
@@ -2029,16 +2065,21 @@
                 });
             }
 
-            // 生成工讀生勾選框 (無變動)
+            // =======================
+            // === (MODIFIED) 生成工讀生勾選框 (generateWorkerCheckboxes) ===
+            // =======================
             generateWorkerCheckboxes() {
-                // ... (code remains the same) ...
                 const workerCheckboxesContainer = document.getElementById('worker-checkboxes');
                 if (!workerCheckboxesContainer) return;
+
+                // (NEW) 從 ScheduleManager 獲取現有的偏好設定
+                const allData = this.scheduleManager.getAllData();
+                const { outsideWorkerPreferences = {} } = allData;
                 
                 const allUsers = this.scheduleManager.getAllUsers();
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 
-                workerCheckboxesContainer.innerHTML = '';
+                workerCheckboxesContainer.innerHTML = ''; // 清空舊的
                 
                 outsideWorkers.forEach(worker => {
                     const checkboxDiv = document.createElement('div');
@@ -2046,12 +2087,18 @@
                     
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
-                    checkbox.id = `worker-${worker.id}`;
-                    checkbox.className = 'rounded border-gray-300 text-green-600 focus:ring-green-500';
-                    checkbox.checked = true; // 預設為可上班
+                    // (MODIFIED) 更改 ID 以避免衝突
+                    checkbox.id = `worker-cover-pref-${worker.id}`;
+                    // (NEW) 使用 dataset 儲存 worker ID
+                    checkbox.dataset.workerId = worker.id;
+                    // (NEW) 添加 class 以便於事件監聽
+                    checkbox.className = 'rounded border-gray-300 text-green-600 focus:ring-green-500 worker-cover-pref-checkbox';
+                    
+                    // (MODIFIED) 根據儲存的偏好設定，預設為 false (未勾選)
+                    checkbox.checked = outsideWorkerPreferences[worker.id]?.canCoverCounter || false; 
                     
                     const label = document.createElement('label');
-                    label.htmlFor = `worker-${worker.id}`;
+                    label.htmlFor = `worker-cover-pref-${worker.id}`;
                     label.className = 'text-sm font-medium text-gray-700';
                     label.textContent = worker.username;
                     
@@ -2059,6 +2106,39 @@
                     checkboxDiv.appendChild(label);
                     workerCheckboxesContainer.appendChild(checkboxDiv);
                 });
+                
+                // (NEW) 為整個容器添加事件監聽器 (事件委派)
+                // (NEW) 移除舊的監聽器以防重複綁定
+                if (this.workerCheckboxListener) {
+                     workerCheckboxesContainer.removeEventListener('change', this.workerCheckboxListener);
+                }
+                
+                this.workerCheckboxListener = async (e) => {
+                    if (e.target.classList.contains('worker-cover-pref-checkbox')) {
+                        const workerId = e.target.dataset.workerId;
+                        const canCover = e.target.checked;
+                        
+                        // 獲取當前的偏好設定並更新
+                        const currentPrefs = this.scheduleManager.getAllData().outsideWorkerPreferences || {};
+                        const newPrefs = {
+                            ...currentPrefs,
+                            [workerId]: { canCoverCounter: canCover }
+                        };
+                        
+                        try {
+                            // (NEW) 調用 ScheduleManager 的新方法來儲存
+                            await this.scheduleManager.updateOutsideWorkerPreferences(newPrefs);
+                            this.uiManager.showToast(`${e.target.nextElementSibling.textContent} 設定已更新`);
+                        } catch (error) {
+                            console.error('更新工讀生偏好設定失敗:', error);
+                            this.uiManager.showToast('更新失敗，請稍後再試');
+                            // 如果更新失敗，將勾選框恢復原狀
+                            e.target.checked = !canCover;
+                        }
+                    }
+                };
+                
+                workerCheckboxesContainer.addEventListener('change', this.workerCheckboxListener);
             }
 
             // 正職人員視圖 (無變動)
@@ -2773,6 +2853,9 @@
                        await this.handleManualAssignment(e);
                     }
                 });
+
+                // (MOVED) 勾選框的事件監聽器被移到 generateWorkerCheckboxes 內部
+                // 以確保在 DOM 元素存在後才綁定，並且只綁定一次。
             }
 
             // 登入狀態監聽 (無變動)
