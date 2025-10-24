@@ -1132,11 +1132,135 @@
                 }
             }
 
+            // 統一的排班邏輯核心函數
+            generateDaySchedule(dateString, dayOfWeek, counterVacation, availableWorkers, workerUnavailability, workerVacationTimes, workerWorkDays) {
+                const daySchedule = [];
+                
+                if (counterVacation) {
+                    // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
+                    const dayAvailableWorkers = availableWorkers.filter(worker => 
+                        !workerUnavailability[worker.username].includes(dateString)
+                    );
+                    
+                    if (dayAvailableWorkers.length > 0) {
+                        // 總共5個班別
+                        const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
+                        
+                        // 平均分配班別給可用的工讀生
+                        const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            workerWorkDays[a.username] - workerWorkDays[b.username]
+                        );
+                        // 打亂班別以隨機分配
+                        const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                        
+                        // 分配邏輯：
+                        // 1. 優先把班別分配給不同的人
+                        // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
+                        let workerIndex = 0;
+                        for (const shift of shuffledShifts) {
+                            let assigned = false;
+                            let attempt = 0;
+                            
+                            // 嘗試分配給下一個工人，最多繞一圈
+                            while (!assigned && attempt < sortedWorkers.length) {
+                                const worker = sortedWorkers[workerIndex % sortedWorkers.length];
+                                
+                                let hasConflict = false;
+                                const morningGroup = ["早櫃", "早班"];
+                                const eveningGroup = ["晚櫃", "洗碗", "收班"];
+
+                                // Check for conflicts
+                                for (const existing of daySchedule) {
+                                    if (existing.username === worker.username) {
+                                        // Rule 1: "早櫃" and "早班" cannot be the same person
+                                        if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
+                                            hasConflict = true;
+                                            break;
+                                        }
+                                        
+                                        // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
+                                        if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
+                                            hasConflict = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
+                                if (!hasConflict && this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
+                                    daySchedule.push({
+                                        username: worker.username,
+                                        role: "外場工讀生",
+                                        shift: shift
+                                    });
+                                    workerWorkDays[worker.username]++;
+                                    assigned = true;
+                                }
+                                
+                                workerIndex++;
+                                attempt++;
+                            }
+                        }
+                    }
+                } else {
+                    // 正常排班
+                    const dayAvailableWorkers = availableWorkers.filter(worker => 
+                        !workerUnavailability[worker.username].includes(dateString)
+                    );
+                    
+                    if (dayAvailableWorkers.length > 0) {
+                        // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
+                        let shifts = [];
+                        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                            // 星期一到星期五：收班、洗碗（櫃檯由櫃檯人員擔任）
+                            shifts = ["收班", "洗碗"];
+                        } else {
+                            // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
+                            shifts = ["早班", "收班", "洗碗"];
+                        }
+                        
+                        // 平均分配班別給可用的工讀生
+                        const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                            workerWorkDays[a.username] - workerWorkDays[b.username]
+                        );
+                        const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
+                        
+                        for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
+                            const worker = sortedWorkers[i];
+                            const shift = shuffledShifts[i];
+                            
+                            // 檢查工人是否可以在這個班次工作（考慮分時段休假）
+                            if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
+                                continue;
+                            }
+                            
+                            // 檢查衝突：洗碗和收班不能是同一個人
+                            const hasConflict = daySchedule.some(existing => 
+                                existing.username === worker.username && 
+                                ((existing.shift === "洗碗" && shift === "收班") || 
+                                 (existing.shift === "收班" && shift === "洗碗"))
+                            );
+                            
+                            if (!hasConflict) {
+                                daySchedule.push({
+                                    username: worker.username,
+                                    role: "外場工讀生",
+                                    shift: shift
+                                });
+                                workerWorkDays[worker.username]++;
+                            }
+                        }
+                    }
+                }
+                
+                return daySchedule;
+            }
+
             // 專門用於自動排班的方法，不依賴勾選框狀態
             async generateOutsideScheduleAuto(year, month, startDay = 1, endDay = null) {
                 const allUsers = this.scheduleManager.getAllUsers();
                 const allData = this.scheduleManager.getAllData();
-                const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
+                const { userVacations = {}, userAvailability = {}, outsideSchedule = {}, userVacationTimes = {} } = allData;
                 
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
@@ -1160,11 +1284,14 @@
                     });
                 });
                 
-                // 獲取工讀生不可上班日期
+                // 獲取工讀生不可上班日期和分時段休假
                 const workerUnavailability = {};
+                const workerVacationTimes = {};
                 outsideWorkers.forEach(worker => {
                     const availabilityKey = `${worker.id}-${year}-${month}`;
+                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
+                    workerVacationTimes[worker.username] = userVacationTimes[vacationTimeKey] || {};
                 });
                 
                 // 計算每個工讀生的工作天數
@@ -1181,126 +1308,19 @@
                     // 跳過星期四（公休日）
                     if (dayOfWeek === 4) continue;
                     
-                    const daySchedule = [];
-                    
                     // 檢查是否有櫃檯休假
                     const counterVacation = counterVacations.find(cv => cv.date === dateString);
                     
-                    if (counterVacation) {
-                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
-                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
-                        
-                        if (dayAvailableWorkers.length > 0) {
-                            // 總共5個班別
-                            const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
-                            
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
-                                workerWorkDays[a.username] - workerWorkDays[b.username]
-                            );
-                            // 打亂班別以隨機分配
-                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                            
-                            // 分配邏輯：
-                            // 1. 優先把班別分配給不同的人
-                            // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
-                            let workerIndex = 0;
-                            for (const shift of shuffledShifts) {
-                                let assigned = false;
-                                let attempt = 0;
-                                
-                                // 嘗試分配給下一個工人，最多繞一圈
-                                while (!assigned && attempt < sortedWorkers.length) {
-                                    const worker = sortedWorkers[workerIndex % sortedWorkers.length];
-                                    
-                                    let hasConflict = false;
-                                    const morningGroup = ["早櫃", "早班"];
-                                    const eveningGroup = ["晚櫃", "洗碗", "收班"];
-
-                                    // Check for conflicts
-                                    for (const existing of daySchedule) {
-                                        if (existing.username === worker.username) {
-                                            // Rule 1: "早櫃" and "早班" cannot be the same person
-                                            if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
-                                                hasConflict = true;
-                                                break;
-                                            }
-                                            
-                                            // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
-                                            if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
-                                                hasConflict = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    
-                                    if (!hasConflict) {
-                                        daySchedule.push({
-                                            username: worker.username,
-                                            role: "外場工讀生",
-                                            shift: shift
-                                        });
-                                        workerWorkDays[worker.username]++;
-                                        assigned = true;
-                                    }
-                                    
-                                    workerIndex++;
-                                    attempt++;
-                                }
-                            }
-                        }
-                    } else {
-                        // 正常排班
-                        const dayAvailableWorkers = outsideWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
-                        
-                        if (dayAvailableWorkers.length > 0) {
-                            // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
-                            let shifts = [];
-                            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                                // 星期一到星期五：收班、洗碗（櫃檯由櫃檯人員擔任）
-                                shifts = ["收班", "洗碗"];
-                            } else {
-                                // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
-                                shifts = ["早班", "收班", "洗碗"];
-                            }
-                            
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
-                                workerWorkDays[a.username] - workerWorkDays[b.username]
-                            );
-                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                            
-                            for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
-                                const worker = sortedWorkers[i];
-                                const shift = shuffledShifts[i];
-                                
-                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
-                                if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
-                                    continue;
-                                }
-                                
-                                // 檢查衝突：洗碗和收班不能是同一個人
-                                const hasConflict = daySchedule.some(existing => 
-                                    existing.username === worker.username && 
-                                    ((existing.shift === "洗碗" && shift === "收班") || 
-                                     (existing.shift === "收班" && shift === "洗碗"))
-                                );
-                                
-                                if (!hasConflict) {
-                                    daySchedule.push({
-                                        username: worker.username,
-                                        role: "外場工讀生",
-                                        shift: shift
-                                    });
-                                    workerWorkDays[worker.username]++;
-                                }
-                            }
-                        }
-                    }
+                    // 使用統一的排班邏輯
+                    const daySchedule = this.generateDaySchedule(
+                        dateString, 
+                        dayOfWeek, 
+                        counterVacation, 
+                        outsideWorkers, 
+                        workerUnavailability, 
+                        workerVacationTimes, 
+                        workerWorkDays
+                    );
                     
                     if (daySchedule.length > 0) {
                         newSchedule[dateString] = daySchedule;
@@ -1690,6 +1710,9 @@
                     // 清除待處理的休假日期
                     this.pendingVacationDate = null;
                     
+                    // 手動觸發月曆重新渲染，確保休假時間立即更新
+                    this.renderAppView();
+                    
                 } catch (error) {
                     console.error('更新休假時間失敗:', error);
                     this.uiManager.showToast(`更新休假時間失敗：${error.message}`);
@@ -1777,126 +1800,19 @@
                     // 跳過星期四（公休日）
                     if (dayOfWeek === 4) continue;
                     
-                    const daySchedule = [];
-                    
                     // 檢查是否有櫃檯休假
                     const counterVacation = counterVacations.find(cv => cv.date === dateString);
                     
-                    if (counterVacation) {
-                        // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
-                        const dayAvailableWorkers = availableWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
-                        
-                        if (dayAvailableWorkers.length > 0) {
-                            // 總共5個班別
-                            const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
-                            
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
-                                workerWorkDays[a.username] - workerWorkDays[b.username]
-                            );
-                            // 打亂班別以隨機分配
-                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                            
-                            // 分配邏輯：
-                            // 1. 優先把班別分配給不同的人
-                            // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
-                            let workerIndex = 0;
-                            for (const shift of shuffledShifts) {
-                                let assigned = false;
-                                let attempt = 0;
-                                
-                                // 嘗試分配給下一個工人，最多繞一圈
-                                while (!assigned && attempt < sortedWorkers.length) {
-                                    const worker = sortedWorkers[workerIndex % sortedWorkers.length];
-                                    
-                                    let hasConflict = false;
-                                    const morningGroup = ["早櫃", "早班"];
-                                    const eveningGroup = ["晚櫃", "洗碗", "收班"];
-
-                                    // Check for conflicts
-                                    for (const existing of daySchedule) {
-                                        if (existing.username === worker.username) {
-                                            // Rule 1: "早櫃" and "早班" cannot be the same person
-                                            if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
-                                                hasConflict = true;
-                                                break;
-                                            }
-                                            
-                                            // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
-                                            if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
-                                                hasConflict = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    
-                                    if (!hasConflict) {
-                                        daySchedule.push({
-                                            username: worker.username,
-                                            role: "外場工讀生",
-                                            shift: shift
-                                        });
-                                        workerWorkDays[worker.username]++;
-                                        assigned = true;
-                                    }
-                                    
-                                    workerIndex++;
-                                    attempt++;
-                                }
-                            }
-                        }
-                    } else {
-                        // 正常排班
-                        const dayAvailableWorkers = availableWorkers.filter(worker => 
-                            !workerUnavailability[worker.username].includes(dateString)
-                        );
-                        
-                        if (dayAvailableWorkers.length > 0) {
-                            // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
-                            let shifts = [];
-                            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                                // 星期一到星期五：收班、洗碗（櫃檯由櫃檯人員擔任）
-                                shifts = ["收班", "洗碗"];
-                            } else {
-                                // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
-                                shifts = ["早班", "收班", "洗碗"];
-                            }
-                            
-                            // 平均分配班別給可用的工讀生
-                            const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
-                                workerWorkDays[a.username] - workerWorkDays[b.username]
-                            );
-                            const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                            
-                            for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
-                                const worker = sortedWorkers[i];
-                                const shift = shuffledShifts[i];
-                                
-                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
-                                if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
-                                    continue;
-                                }
-                                
-                                // 檢查衝突：洗碗和收班不能是同一個人
-                                const hasConflict = daySchedule.some(existing => 
-                                    existing.username === worker.username && 
-                                    ((existing.shift === "洗碗" && shift === "收班") || 
-                                     (existing.shift === "收班" && shift === "洗碗"))
-                                );
-                                
-                                if (!hasConflict) {
-                                    daySchedule.push({
-                                        username: worker.username,
-                                        role: "外場工讀生",
-                                        shift: shift
-                                    });
-                                    workerWorkDays[worker.username]++;
-                                }
-                            }
-                        }
-                    }
+                    // 使用統一的排班邏輯
+                    const daySchedule = this.generateDaySchedule(
+                        dateString, 
+                        dayOfWeek, 
+                        counterVacation, 
+                        availableWorkers, 
+                        workerUnavailability, 
+                        workerVacationTimes, 
+                        workerWorkDays
+                    );
                     
                     if (daySchedule.length > 0) {
                         newSchedule[dateString] = daySchedule;
@@ -2893,7 +2809,7 @@
                 
                 const holidays = await this.calendarManager.fetchHolidays(year);
                 const allData = this.scheduleManager.getAllData();
-                const { userVacations = {}, adminHolidays = [], userAvailability = {}, outsideSchedule = {}, manualAssignments = {} } = allData; 
+                const { userVacations = {}, adminHolidays = [], userAvailability = {}, outsideSchedule = {}, manualAssignments = {}, userVacationTimes = {} } = allData; 
 
                 const dailySchedule = {};
                 const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
@@ -3131,17 +3047,40 @@
                             }
                         } else if (currentUserData.role === "外場工讀生") {
                             const availabilityKey = `${currentUserData.uid}-${year}-${month+1}`;
+                            const vacationTimeKey = `${currentUserData.uid}-${year}-${month+1}`;
                             const isUnavailable = (userAvailability[availabilityKey] || []).includes(dateString);
+                            const vacationData = userVacationTimes[vacationTimeKey]?.[dateString];
                             const isWorking = workingUsers.some(w => w.username === currentUserData.username);
 
                             if (isWorking) { // Check if working first
                                 if(!holidayName && !isShortage) day.classList.add('bg-blue-100'); // (MODIFIED)
                                 day.classList.add('border', 'border-blue-400');
                                 selfStatusHtml = `<p class="font-semibold text-blue-700">上班</p>`;
-                            } else if (isUnavailable) { // Then check if unavailable
+                            } else if (isUnavailable) { // Then check if unavailable (old system)
                                 if(!holidayName && !isShortage) day.classList.add('bg-red-100'); // (MODIFIED)
                                 day.classList.add('border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">不上班</p>`;
+                            } else if (vacationData) { // Check new vacation time system
+                                if (vacationData.morning && vacationData.evening) {
+                                    // 全天休假
+                                    if(!holidayName && !isShortage) day.classList.add('bg-red-100');
+                                    day.classList.add('border', 'border-red-400');
+                                    selfStatusHtml = `<p class="font-semibold text-red-700">全天休假</p>`;
+                                } else if (vacationData.morning) {
+                                    // 早上休假
+                                    if(!holidayName && !isShortage) day.classList.add('bg-orange-100');
+                                    day.classList.add('border', 'border-orange-400');
+                                    selfStatusHtml = `<p class="font-semibold text-orange-700">早上休假</p>`;
+                                } else if (vacationData.evening) {
+                                    // 晚上休假
+                                    if(!holidayName && !isShortage) day.classList.add('bg-yellow-100');
+                                    day.classList.add('border', 'border-yellow-400');
+                                    selfStatusHtml = `<p class="font-semibold text-yellow-700">晚上休假</p>`;
+                                } else {
+                                    // 可以工作
+                                    if(!holidayName && !isShortage) day.classList.add('bg-white');
+                                    selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
+                                }
                             } else { // Otherwise, available but not scheduled
                                 if(!holidayName && !isShortage) day.classList.add('bg-white'); // (MODIFIED)
                                 selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
@@ -3273,6 +3212,7 @@
                                 if(!this.uiManager.settingsModal.classList.contains('hidden')) return;
                                 if(!this.uiManager.shiftSelectModal.classList.contains('hidden')) return;
                                 if(!this.uiManager.coverShiftModal.classList.contains('hidden')) return;
+                                if(!this.uiManager.vacationTimeModal.classList.contains('hidden')) return;
                                 this.renderAppView();
                             });
                             
