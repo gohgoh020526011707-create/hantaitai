@@ -207,6 +207,35 @@
         </div>
 
 
+        <div id="delete-user-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-red-600">確認刪除用戶</h2>
+                    <button id="close-delete-user-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <p id="delete-user-info" class="text-gray-700">您確定要刪除這個用戶嗎？</p>
+                    <p class="text-sm text-red-600 font-semibold">警告：此操作將永久刪除用戶及其所有相關數據，包括：</p>
+                    <ul class="text-sm text-gray-600 list-disc list-inside ml-4">
+                        <li>用戶帳號</li>
+                        <li>所有排班記錄</li>
+                        <li>休假記錄</li>
+                        <li>代班記錄</li>
+                    </ul>
+                    <div class="flex gap-3 pt-4">
+                        <button id="confirm-delete-user-btn" class="flex-1 p-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">
+                            確認刪除
+                        </button>
+                        <button id="cancel-delete-user-btn" class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
         </div>
@@ -228,6 +257,7 @@
             doc, 
             setDoc, 
             getDoc,
+            deleteDoc,
             onSnapshot,
             collection,
             query,
@@ -613,6 +643,67 @@
                     throw error;
                 }
             }
+
+            async deleteUser(userId) {
+                try {
+                    console.log('開始刪除用戶:', userId);
+                    
+                    // 1. 刪除用戶文檔
+                    await deleteDoc(doc(this.db, "users", userId));
+                    console.log('用戶文檔已刪除');
+                    
+                    // 2. 清理所有相關數據
+                    const currentData = this.allData;
+                    const updatedData = { ...currentData };
+                    
+                    // 清理 userVacations
+                    const userVacationKeys = Object.keys(updatedData.userVacations || {}).filter(key => key.startsWith(`${userId}-`));
+                    userVacationKeys.forEach(key => {
+                        delete updatedData.userVacations[key];
+                    });
+                    
+                    // 清理 userAvailability
+                    const userAvailabilityKeys = Object.keys(updatedData.userAvailability || {}).filter(key => key.startsWith(`${userId}-`));
+                    userAvailabilityKeys.forEach(key => {
+                        delete updatedData.userAvailability[key];
+                    });
+                    
+                    // 清理 coverSignups 中該用戶的代班記錄
+                    const updatedCoverSignups = { ...updatedData.coverSignups };
+                    Object.keys(updatedCoverSignups).forEach(key => {
+                        if (updatedCoverSignups[key] === userId) {
+                            delete updatedCoverSignups[key];
+                        }
+                    });
+                    updatedData.coverSignups = updatedCoverSignups;
+                    
+                    // 清理 manualAssignments 中該用戶的排班記錄
+                    const updatedManualAssignments = { ...updatedData.manualAssignments };
+                    Object.keys(updatedManualAssignments).forEach(dateKey => {
+                        if (Array.isArray(updatedManualAssignments[dateKey])) {
+                            updatedManualAssignments[dateKey] = updatedManualAssignments[dateKey].filter(assignment => assignment.userId !== userId);
+                        }
+                    });
+                    updatedData.manualAssignments = updatedManualAssignments;
+                    
+                    // 清理 outsideSchedule 中該用戶的排班記錄
+                    const updatedOutsideSchedule = { ...updatedData.outsideSchedule };
+                    Object.keys(updatedOutsideSchedule).forEach(dateKey => {
+                        if (Array.isArray(updatedOutsideSchedule[dateKey])) {
+                            updatedOutsideSchedule[dateKey] = updatedOutsideSchedule[dateKey].filter(shift => shift.userId !== userId);
+                        }
+                    });
+                    updatedData.outsideSchedule = updatedOutsideSchedule;
+                    
+                    // 3. 更新數據庫
+                    await setDoc(doc(this.db, "scheduleData", "main"), updatedData);
+                    console.log('用戶相關數據已清理完成');
+                    
+                } catch (error) {
+                    console.error('刪除用戶失敗:', error);
+                    throw error;
+                }
+            }
         }
 
         // ===================================================================================
@@ -659,6 +750,13 @@
                 this.coverShiftForm = document.getElementById('cover-shift-form');
                 this.coverShiftInfo = document.getElementById('cover-shift-info');
                 this.coverShiftSelect = document.getElementById('cover-shift-replacement-select');
+                
+                // 刪除用戶 Modal
+                this.deleteUserModal = document.getElementById('delete-user-modal');
+                this.closeDeleteUserBtn = document.getElementById('close-delete-user-btn');
+                this.confirmDeleteUserBtn = document.getElementById('confirm-delete-user-btn');
+                this.cancelDeleteUserBtn = document.getElementById('cancel-delete-user-btn');
+                this.deleteUserInfo = document.getElementById('delete-user-info');
             }
 
             showToast(message) {
@@ -758,6 +856,17 @@
                 this.coverShiftForm.reset();
             }
 
+            // 顯示刪除用戶 Modal
+            showDeleteUserModal(userInfo) {
+                this.deleteUserInfo.textContent = `您確定要刪除用戶「${userInfo.username}」(${userInfo.role}) 嗎？`;
+                this.deleteUserModal.classList.remove('hidden');
+            }
+
+            // 隱藏刪除用戶 Modal
+            hideDeleteUserModal() {
+                this.deleteUserModal.classList.add('hidden');
+            }
+
             updateUserInfo(username, role) {
                 this.userNameSpan.textContent = username;
                 this.userRoleSpan.textContent = role;
@@ -807,6 +916,7 @@
                 this.setupEventListeners();
                 this.setupAuthStateListener();
                 this.setupAutoSchedule();
+                this.pendingDeleteUser = null;
                 
                 // === (NEW) Define shift options ===
                 this.insideShifts = [
@@ -1412,6 +1522,37 @@
                     this.uiManager.showToast(`換班失敗：${error.message}`);
                 }
             }
+
+            // 處理刪除用戶點擊
+            handleDeleteUserClick(userId, username, role) {
+                this.pendingDeleteUser = { id: userId, username, role };
+                this.uiManager.showDeleteUserModal({ username, role });
+            }
+
+            // 處理確認刪除用戶
+            async handleDeleteUser() {
+                if (!this.pendingDeleteUser) {
+                    this.uiManager.showToast('沒有選擇要刪除的用戶');
+                    return;
+                }
+
+                try {
+                    this.uiManager.showToast('正在刪除用戶...');
+                    await this.scheduleManager.deleteUser(this.pendingDeleteUser.id);
+                    this.uiManager.showToast(`用戶「${this.pendingDeleteUser.username}」已成功刪除`);
+                    this.uiManager.hideDeleteUserModal();
+                    
+                    // 重新生成用戶管理列表
+                    this.generateUserManagementLists();
+                    
+                    // 清除待刪除用戶
+                    this.pendingDeleteUser = null;
+                    
+                } catch (error) {
+                    console.error('刪除用戶失敗:', error);
+                    this.uiManager.showToast(`刪除用戶失敗：${error.message}`);
+                }
+            }
             
             // 外場排班系統 (Generator - 無變動)
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
@@ -1937,6 +2078,21 @@
                                 <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
                             </form>
                         </div>
+                        <div id="user-management-panel" class="mt-4 p-4 sm:p-6 bg-red-50 border border-red-200 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4 text-red-800">用戶管理</h3>
+                            <div class="mb-4">
+                                <h4 class="text-md font-semibold mb-3 text-red-800">內場工讀生</h4>
+                                <div id="inside-workers-list" class="space-y-2">
+                                    <!-- 內場工讀生列表將在這裡動態生成 -->
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <h4 class="text-md font-semibold mb-3 text-red-800">外場工讀生</h4>
+                                <div id="outside-workers-list" class="space-y-2">
+                                    <!-- 外場工讀生列表將在這裡動態生成 -->
+                                </div>
+                            </div>
+                        </div>
                         <div id="outside-schedule-panel" class="mt-4 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-xl">
                             <h3 class="text-lg font-bold mb-4 text-green-800">外場排班管理</h3>
                             <div class="flex flex-col sm:flex-row gap-4 items-center mb-4">
@@ -1997,6 +2153,9 @@
                 
                 // 生成工讀生勾選框
                 this.generateWorkerCheckboxes();
+                
+                // 生成用戶管理列表
+                this.generateUserManagementLists();
             }
 
             // 更新按鈕樣式 + 更新下拉選單 (無變動)
@@ -2058,6 +2217,73 @@
                     checkboxDiv.appendChild(label);
                     workerCheckboxesContainer.appendChild(checkboxDiv);
                 });
+            }
+
+            // 生成用戶管理列表
+            generateUserManagementLists() {
+                const allUsers = this.scheduleManager.getAllUsers();
+                const insideWorkers = allUsers.filter(u => u.role === "内場工讀生");
+                const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
+                
+                // 生成內場工讀生列表
+                const insideWorkersList = document.getElementById('inside-workers-list');
+                if (insideWorkersList) {
+                    insideWorkersList.innerHTML = '';
+                    if (insideWorkers.length === 0) {
+                        insideWorkersList.innerHTML = '<p class="text-gray-500 text-sm">暫無內場工讀生</p>';
+                    } else {
+                        insideWorkers.forEach(worker => {
+                            const workerDiv = document.createElement('div');
+                            workerDiv.className = 'flex items-center justify-between p-3 bg-white rounded border';
+                            workerDiv.innerHTML = `
+                                <div class="flex items-center space-x-3">
+                                    <span class="material-icons-outlined text-gray-600">person</span>
+                                    <div>
+                                        <p class="font-semibold text-gray-800">${worker.username}</p>
+                                        <p class="text-sm text-gray-500">${worker.role}</p>
+                                    </div>
+                                </div>
+                                <button class="delete-user-btn px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600" 
+                                        data-user-id="${worker.id}" 
+                                        data-username="${worker.username}" 
+                                        data-role="${worker.role}">
+                                    刪除
+                                </button>
+                            `;
+                            insideWorkersList.appendChild(workerDiv);
+                        });
+                    }
+                }
+                
+                // 生成外場工讀生列表
+                const outsideWorkersList = document.getElementById('outside-workers-list');
+                if (outsideWorkersList) {
+                    outsideWorkersList.innerHTML = '';
+                    if (outsideWorkers.length === 0) {
+                        outsideWorkersList.innerHTML = '<p class="text-gray-500 text-sm">暫無外場工讀生</p>';
+                    } else {
+                        outsideWorkers.forEach(worker => {
+                            const workerDiv = document.createElement('div');
+                            workerDiv.className = 'flex items-center justify-between p-3 bg-white rounded border';
+                            workerDiv.innerHTML = `
+                                <div class="flex items-center space-x-3">
+                                    <span class="material-icons-outlined text-gray-600">person</span>
+                                    <div>
+                                        <p class="font-semibold text-gray-800">${worker.username}</p>
+                                        <p class="text-sm text-gray-500">${worker.role}</p>
+                                    </div>
+                                </div>
+                                <button class="delete-user-btn px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600" 
+                                        data-user-id="${worker.id}" 
+                                        data-username="${worker.username}" 
+                                        data-role="${worker.role}">
+                                    刪除
+                                </button>
+                            `;
+                            outsideWorkersList.appendChild(workerDiv);
+                        });
+                    }
+                }
             }
 
             // 正職人員視圖 (無變動)
@@ -2732,9 +2958,20 @@
                 this.uiManager.closeCoverShiftBtn.addEventListener('click', () => this.uiManager.hideCoverShiftModal());
                 this.uiManager.coverShiftForm.addEventListener('submit', (e) => this.handleAssignCoverShift(e));
                 
+                // Delete User Modal Listeners
+                this.uiManager.closeDeleteUserBtn.addEventListener('click', () => this.uiManager.hideDeleteUserModal());
+                this.uiManager.cancelDeleteUserBtn.addEventListener('click', () => this.uiManager.hideDeleteUserModal());
+                this.uiManager.confirmDeleteUserBtn.addEventListener('click', () => this.handleDeleteUser());
+                
                 // Calendar View Event Delegation
                 this.uiManager.calendarView.addEventListener('click', async (e) => {
                     // --- Button specific actions first ---
+                    if (e.target.closest('.delete-user-btn')) {
+                        e.stopPropagation();
+                        const btn = e.target.closest('.delete-user-btn');
+                        this.handleDeleteUserClick(btn.dataset.userId, btn.dataset.username, btn.dataset.role);
+                        return;
+                    }
                     if (e.target.closest('.delete-manual-assignment-btn')) {
                         e.stopPropagation();
                         const btn = e.target.closest('.delete-manual-assignment-btn');
