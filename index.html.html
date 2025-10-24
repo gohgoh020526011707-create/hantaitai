@@ -207,6 +207,44 @@
         </div>
 
 
+        <div id="vacation-time-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-blue-600">選擇休假時間</h2>
+                    <button id="close-vacation-time-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <p id="vacation-time-info" class="text-gray-700">請選擇您要休假的時間段：</p>
+                    <div class="space-y-3">
+                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="vacation-morning" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                            <div class="flex-1">
+                                <span class="font-medium text-gray-800">早上休假</span>
+                                <p class="text-sm text-gray-500">勾選表示早上休假，不勾選表示可以排早櫃、早班</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="vacation-evening" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                            <div class="flex-1">
+                                <span class="font-medium text-gray-800">晚上休假</span>
+                                <p class="text-sm text-gray-500">勾選表示晚上休假，不勾選表示可以排晚櫃、晚班、洗碗、收班</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="flex gap-3 pt-4">
+                        <button id="confirm-vacation-time-btn" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
+                            確認
+                        </button>
+                        <button id="cancel-vacation-time-btn" class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="delete-user-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
@@ -602,6 +640,23 @@
                 }, { merge: true });
             }
 
+            async updateUserVacationTime(userId, year, month, date, vacationData) {
+                const vacationTimeKey = `${userId}-${year}-${month}`;
+                const currentVacationTimes = this.allData.userVacationTimes || {};
+                const userVacationTimes = currentVacationTimes[vacationTimeKey] || {};
+                
+                // 如果兩個時段都不休假，則刪除該日期的記錄
+                if (!vacationData.morning && !vacationData.evening) {
+                    delete userVacationTimes[date];
+                } else {
+                    userVacationTimes[date] = vacationData;
+                }
+                
+                await setDoc(doc(this.db, "scheduleData", "main"), { 
+                    userVacationTimes: { ...currentVacationTimes, [vacationTimeKey]: userVacationTimes } 
+                }, { merge: true });
+            }
+
             async updateAdminHolidays(holidays) {
                 await setDoc(doc(this.db, "scheduleData", "main"), { adminHolidays: holidays }, { merge: true });
             }
@@ -751,6 +806,15 @@
                 this.coverShiftInfo = document.getElementById('cover-shift-info');
                 this.coverShiftSelect = document.getElementById('cover-shift-replacement-select');
                 
+                // 休假時間選擇 Modal
+                this.vacationTimeModal = document.getElementById('vacation-time-modal');
+                this.closeVacationTimeBtn = document.getElementById('close-vacation-time-btn');
+                this.confirmVacationTimeBtn = document.getElementById('confirm-vacation-time-btn');
+                this.cancelVacationTimeBtn = document.getElementById('cancel-vacation-time-btn');
+                this.vacationTimeInfo = document.getElementById('vacation-time-info');
+                this.vacationMorningCheckbox = document.getElementById('vacation-morning');
+                this.vacationEveningCheckbox = document.getElementById('vacation-evening');
+                
                 // 刪除用戶 Modal
                 this.deleteUserModal = document.getElementById('delete-user-modal');
                 this.closeDeleteUserBtn = document.getElementById('close-delete-user-btn');
@@ -867,6 +931,28 @@
                 this.deleteUserModal.classList.add('hidden');
             }
 
+            // 顯示休假時間選擇 Modal
+            showVacationTimeModal(date, currentVacationData = null) {
+                this.vacationTimeInfo.textContent = `請選擇您在 ${date} 的休假時間段：`;
+                
+                // 設置默認值（兩個都勾選表示全天休假）
+                this.vacationMorningCheckbox.checked = true;
+                this.vacationEveningCheckbox.checked = true;
+                
+                // 如果有現有的休假數據，根據數據設置勾選狀態
+                if (currentVacationData) {
+                    this.vacationMorningCheckbox.checked = currentVacationData.morning || false;
+                    this.vacationEveningCheckbox.checked = currentVacationData.evening || false;
+                }
+                
+                this.vacationTimeModal.classList.remove('hidden');
+            }
+
+            // 隱藏休假時間選擇 Modal
+            hideVacationTimeModal() {
+                this.vacationTimeModal.classList.add('hidden');
+            }
+
             updateUserInfo(username, role) {
                 this.userNameSpan.textContent = username;
                 this.userRoleSpan.textContent = role;
@@ -917,6 +1003,7 @@
                 this.setupAuthStateListener();
                 this.setupAutoSchedule();
                 this.pendingDeleteUser = null;
+                this.pendingVacationDate = null;
                 
                 // === (NEW) Define shift options ===
                 this.insideShifts = [
@@ -1191,6 +1278,11 @@
                                 const worker = sortedWorkers[i];
                                 const shift = shuffledShifts[i];
                                 
+                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
+                                if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
+                                    continue;
+                                }
+                                
                                 // 檢查衝突：洗碗和收班不能是同一個人
                                 const hasConflict = daySchedule.some(existing => 
                                     existing.username === worker.username && 
@@ -1435,14 +1527,8 @@
                         this.uiManager.showCoverShiftModal(clickedDateStr, shiftToCover, replacementOptions);
 
                     } else {
-                        // === 情境3: 沒有班次，執行「標記不上班」 ===
-                        const availabilityKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
-                        const currentUnavailability = userAvailability?.[availabilityKey] || [];
-                        const newUnavailability = currentUnavailability.includes(clickedDateStr)
-                            ? currentUnavailability.filter(d => d !== clickedDateStr)
-                            : [...currentUnavailability, clickedDateStr];
-                            
-                        await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newUnavailability);
+                        // === 情境3: 沒有班次，顯示休假時間選擇 ===
+                        this.showVacationTimeModal(clickedDateStr, yearFromStr, monthFromStr);
                     }
                     // --- END NEW LOGIC ---
                 }
@@ -1553,6 +1639,85 @@
                     this.uiManager.showToast(`刪除用戶失敗：${error.message}`);
                 }
             }
+
+            // 顯示休假時間選擇
+            showVacationTimeModal(date, year, month) {
+                this.pendingVacationDate = { date, year, month };
+                
+                // 檢查是否有現有的休假數據
+                const allData = this.scheduleManager.getAllData();
+                const vacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${month}`;
+                const userVacationTimes = allData.userVacationTimes?.[vacationTimeKey] || {};
+                const currentVacationData = userVacationTimes[date];
+                
+                this.uiManager.showVacationTimeModal(date, currentVacationData);
+            }
+
+            // 處理確認休假時間選擇
+            async handleVacationTimeConfirm() {
+                if (!this.pendingVacationDate) {
+                    this.uiManager.showToast('沒有選擇休假日期');
+                    return;
+                }
+
+                const { date, year, month } = this.pendingVacationDate;
+                const morningVacation = this.uiManager.vacationMorningCheckbox.checked;
+                const eveningVacation = this.uiManager.vacationEveningCheckbox.checked;
+
+                try {
+                    await this.scheduleManager.updateUserVacationTime(
+                        this.authManager.getCurrentUser().uid,
+                        year,
+                        month,
+                        date,
+                        { morning: morningVacation, evening: eveningVacation }
+                    );
+
+                    let message = '';
+                    if (morningVacation && eveningVacation) {
+                        message = `${date} 已設定為全天休假`;
+                    } else if (morningVacation) {
+                        message = `${date} 已設定為早上休假`;
+                    } else if (eveningVacation) {
+                        message = `${date} 已設定為晚上休假`;
+                    } else {
+                        message = `${date} 已取消休假，可以正常排班`;
+                    }
+
+                    this.uiManager.showToast(message);
+                    this.uiManager.hideVacationTimeModal();
+                    
+                    // 清除待處理的休假日期
+                    this.pendingVacationDate = null;
+                    
+                } catch (error) {
+                    console.error('更新休假時間失敗:', error);
+                    this.uiManager.showToast(`更新休假時間失敗：${error.message}`);
+                }
+            }
+
+            // 檢查工人是否可以在特定時間工作
+            isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes) {
+                const workerVacationData = workerVacationTimes[worker.username]?.[dateString];
+                
+                if (!workerVacationData) {
+                    // 沒有休假記錄，可以工作
+                    return true;
+                }
+                
+                const morningShifts = ["早櫃", "早班"];
+                const eveningShifts = ["晚櫃", "晚班", "洗碗", "收班"];
+                
+                if (morningShifts.includes(shift)) {
+                    // 早上班次，檢查是否早上休假
+                    return !workerVacationData.morning;
+                } else if (eveningShifts.includes(shift)) {
+                    // 晚上班次，檢查是否晚上休假
+                    return !workerVacationData.evening;
+                }
+                
+                return true;
+            }
             
             // 外場排班系統 (Generator - 無變動)
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
@@ -1588,11 +1753,14 @@
                     });
                 });
                 
-                // 獲取工讀生不可上班日期
+                // 獲取工讀生不可上班日期和分時段休假
                 const workerUnavailability = {};
+                const workerVacationTimes = {};
                 availableWorkers.forEach(worker => {
                     const availabilityKey = `${worker.id}-${year}-${month}`;
+                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
+                    workerVacationTimes[worker.username] = allData.userVacationTimes?.[vacationTimeKey] || {};
                 });
                 
                 // 計算每個工讀生的工作天數
@@ -1705,6 +1873,11 @@
                             for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
                                 const worker = sortedWorkers[i];
                                 const shift = shuffledShifts[i];
+                                
+                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
+                                if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
+                                    continue;
+                                }
                                 
                                 // 檢查衝突：洗碗和收班不能是同一個人
                                 const hasConflict = daySchedule.some(existing => 
@@ -3020,6 +3193,11 @@
                 // Cover Shift (Replacement) Modal Listeners
                 this.uiManager.closeCoverShiftBtn.addEventListener('click', () => this.uiManager.hideCoverShiftModal());
                 this.uiManager.coverShiftForm.addEventListener('submit', (e) => this.handleAssignCoverShift(e));
+                
+                // Vacation Time Modal Listeners
+                this.uiManager.closeVacationTimeBtn.addEventListener('click', () => this.uiManager.hideVacationTimeModal());
+                this.uiManager.cancelVacationTimeBtn.addEventListener('click', () => this.uiManager.hideVacationTimeModal());
+                this.uiManager.confirmVacationTimeBtn.addEventListener('click', () => this.handleVacationTimeConfirm());
                 
                 // Delete User Modal Listeners
                 this.uiManager.closeDeleteUserBtn.addEventListener('click', () => this.uiManager.hideDeleteUserModal());
