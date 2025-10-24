@@ -2067,16 +2067,21 @@
                             <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
                         </div>
                         <div id="calendar-grid" class="custom-calendar-grid gap-1 sm:gap-2"></div>
-                        <div id="admin-assignment-panel" class="mt-8 p-4 sm:p-6 bg-indigo-50 border border-indigo-200 rounded-xl">
-                            <h3 class="text-lg font-bold mb-4 text-indigo-800">手動新增排班</h3>
-                            <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                                <input type="date" id="assignment-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                                <input type="text" id="assignment-user" placeholder="輸入姓名" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                                <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                                    <option value="" disabled selected>選擇班別</option>
-                                </select>
-                                <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
-                            </form>
+                        <div id="admin-assignment-panel" class="mt-8 bg-indigo-50 border border-indigo-200 rounded-xl">
+                            <button id="manual-assignment-toggle" class="w-full p-4 sm:p-6 text-left flex items-center justify-between hover:bg-indigo-100 transition-colors">
+                                <h3 class="text-lg font-bold text-indigo-800">手動新增排班</h3>
+                                <span id="manual-assignment-icon" class="material-icons-outlined text-indigo-600 transition-transform">expand_more</span>
+                            </button>
+                            <div id="manual-assignment-content" class="hidden px-4 sm:px-6 pb-4 sm:pb-6">
+                                <form id="manual-assignment-form" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                                    <input type="date" id="assignment-date" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <input type="text" id="assignment-user" placeholder="輸入姓名" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <select id="assignment-role" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                        <option value="" disabled selected>選擇班別</option>
+                                    </select>
+                                    <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
+                                </form>
+                            </div>
                         </div>
                         <div id="user-management-panel" class="mt-4 bg-red-50 border border-red-200 rounded-xl">
                             <button id="user-management-toggle" class="w-full p-4 sm:p-6 text-left flex items-center justify-between hover:bg-red-100 transition-colors">
@@ -2176,6 +2181,22 @@
                 document.getElementById('outside-schedule-toggle').addEventListener('click', () => {
                     const content = document.getElementById('outside-schedule-content');
                     const icon = document.getElementById('outside-schedule-icon');
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        icon.textContent = 'expand_less';
+                        icon.style.transform = 'rotate(0deg)';
+                    } else {
+                        content.classList.add('hidden');
+                        icon.textContent = 'expand_more';
+                        icon.style.transform = 'rotate(0deg)';
+                    }
+                });
+                
+                // 手動新增排班面板折叠/展开
+                document.getElementById('manual-assignment-toggle').addEventListener('click', () => {
+                    const content = document.getElementById('manual-assignment-content');
+                    const icon = document.getElementById('manual-assignment-icon');
                     
                     if (content.classList.contains('hidden')) {
                         content.classList.remove('hidden');
