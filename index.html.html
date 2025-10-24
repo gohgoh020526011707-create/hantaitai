@@ -2078,33 +2078,43 @@
                                 <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">新增</button>
                             </form>
                         </div>
-                        <div id="user-management-panel" class="mt-4 p-4 sm:p-6 bg-red-50 border border-red-200 rounded-xl">
-                            <h3 class="text-lg font-bold mb-4 text-red-800">用戶管理</h3>
-                            <div class="mb-4">
-                                <h4 class="text-md font-semibold mb-3 text-red-800">內場工讀生</h4>
-                                <div id="inside-workers-list" class="space-y-2">
-                                    <!-- 內場工讀生列表將在這裡動態生成 -->
+                        <div id="user-management-panel" class="mt-4 bg-red-50 border border-red-200 rounded-xl">
+                            <button id="user-management-toggle" class="w-full p-4 sm:p-6 text-left flex items-center justify-between hover:bg-red-100 transition-colors">
+                                <h3 class="text-lg font-bold text-red-800">用戶管理</h3>
+                                <span id="user-management-icon" class="material-icons-outlined text-red-600 transition-transform">expand_more</span>
+                            </button>
+                            <div id="user-management-content" class="hidden px-4 sm:px-6 pb-4 sm:pb-6">
+                                <div class="mb-4">
+                                    <h4 class="text-md font-semibold mb-3 text-red-800">內場工讀生</h4>
+                                    <div id="inside-workers-list" class="space-y-2">
+                                        <!-- 內場工讀生列表將在這裡動態生成 -->
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="mb-4">
-                                <h4 class="text-md font-semibold mb-3 text-red-800">外場工讀生</h4>
-                                <div id="outside-workers-list" class="space-y-2">
-                                    <!-- 外場工讀生列表將在這裡動態生成 -->
+                                <div class="mb-4">
+                                    <h4 class="text-md font-semibold mb-3 text-red-800">外場工讀生</h4>
+                                    <div id="outside-workers-list" class="space-y-2">
+                                        <!-- 外場工讀生列表將在這裡動態生成 -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div id="outside-schedule-panel" class="mt-4 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-xl">
-                            <h3 class="text-lg font-bold mb-4 text-green-800">外場排班管理</h3>
-                            <div class="flex flex-col sm:flex-row gap-4 items-center mb-4">
-                                <button id="generate-outside-schedule-btn" class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">
-                                    生成外場排班
-                                </button>
-                                <p class="text-sm text-green-700">根據櫃檯休假和工讀生不可上班日自動排班</p>
-                            </div>
-                            <div id="worker-availability-panel" class="mt-4">
-                                <h4 class="text-md font-semibold mb-3 text-green-800">工讀生可上櫃檯</h4>
-                                <div id="worker-checkboxes" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                    </div>
+                        <div id="outside-schedule-panel" class="mt-4 bg-green-50 border border-green-200 rounded-xl">
+                            <button id="outside-schedule-toggle" class="w-full p-4 sm:p-6 text-left flex items-center justify-between hover:bg-green-100 transition-colors">
+                                <h3 class="text-lg font-bold text-green-800">外場排班管理</h3>
+                                <span id="outside-schedule-icon" class="material-icons-outlined text-green-600 transition-transform">expand_more</span>
+                            </button>
+                            <div id="outside-schedule-content" class="hidden px-4 sm:px-6 pb-4 sm:pb-6">
+                                <div class="flex flex-col sm:flex-row gap-4 items-center mb-4">
+                                    <button id="generate-outside-schedule-btn" class="w-full sm:w-auto px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">
+                                        生成外場排班
+                                    </button>
+                                    <p class="text-sm text-green-700">根據櫃檯休假和工讀生不可上班日自動排班</p>
+                                </div>
+                                <div id="worker-availability-panel" class="mt-4">
+                                    <h4 class="text-md font-semibold mb-3 text-green-800">工讀生可上櫃檯</h4>
+                                    <div id="worker-checkboxes" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                        </div>
+                                </div>
                             </div>
                         </div>
                         <p class="text-center text-sm text-gray-500 mt-4">點擊日期以設定或取消該日為全體公休日。</p>
@@ -2144,6 +2154,38 @@
                     }
                     
                     this.renderOutsideCalendar();
+                });
+                
+                // 用戶管理面板折叠/展开
+                document.getElementById('user-management-toggle').addEventListener('click', () => {
+                    const content = document.getElementById('user-management-content');
+                    const icon = document.getElementById('user-management-icon');
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        icon.textContent = 'expand_less';
+                        icon.style.transform = 'rotate(0deg)';
+                    } else {
+                        content.classList.add('hidden');
+                        icon.textContent = 'expand_more';
+                        icon.style.transform = 'rotate(0deg)';
+                    }
+                });
+                
+                // 外場排班管理面板折叠/展开
+                document.getElementById('outside-schedule-toggle').addEventListener('click', () => {
+                    const content = document.getElementById('outside-schedule-content');
+                    const icon = document.getElementById('outside-schedule-icon');
+                    
+                    if (content.classList.contains('hidden')) {
+                        content.classList.remove('hidden');
+                        icon.textContent = 'expand_less';
+                        icon.style.transform = 'rotate(0deg)';
+                    } else {
+                        content.classList.add('hidden');
+                        icon.textContent = 'expand_more';
+                        icon.style.transform = 'rotate(0deg)';
+                    }
                 });
                 
                 // 初始化為內場月曆
