@@ -1226,29 +1226,52 @@
                         );
                         const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
                         
-                        for (let i = 0; i < Math.min(sortedWorkers.length, shuffledShifts.length); i++) {
-                            const worker = sortedWorkers[i];
-                            const shift = shuffledShifts[i];
+                        // 修復：為每個班次尋找合適的工人，而不是綁定索引
+                        let workerIndex = 0;
+                        for (const shift of shuffledShifts) {
+                            let assigned = false;
+                            let attempt = 0;
                             
-                            // 檢查工人是否可以在這個班次工作（考慮分時段休假）
-                            if (!this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
-                                continue;
-                            }
-                            
-                            // 檢查衝突：洗碗和收班不能是同一個人
-                            const hasConflict = daySchedule.some(existing => 
-                                existing.username === worker.username && 
-                                ((existing.shift === "洗碗" && shift === "收班") || 
-                                 (existing.shift === "收班" && shift === "洗碗"))
-                            );
-                            
-                            if (!hasConflict) {
-                                daySchedule.push({
-                                    username: worker.username,
-                                    role: "外場工讀生",
-                                    shift: shift
-                                });
-                                workerWorkDays[worker.username]++;
+                            // 嘗試分配給下一個工人，最多繞一圈
+                            while (!assigned && attempt < sortedWorkers.length) {
+                                const worker = sortedWorkers[workerIndex % sortedWorkers.length];
+                                
+                                // 檢查工人是否可以在這個班次工作（考慮分時段休假）
+                                const canWork = this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes);
+                                
+                                // 檢查衝突：使用與櫃檯休假相同的分組規則
+                                let hasConflict = false;
+                                const morningGroup = ["早班"];  // 正常排班時，只有早班屬於早班組
+                                const eveningGroup = ["洗碗", "收班"];  // 洗碗、收班屬於晚班組
+                                
+                                for (const existing of daySchedule) {
+                                    if (existing.username === worker.username) {
+                                        // Rule 1: 早班組內不能重複（這裡只有一個早班，所以不會衝突）
+                                        if (morningGroup.includes(shift) && morningGroup.includes(existing.shift)) {
+                                            hasConflict = true;
+                                            break;
+                                        }
+                                        
+                                        // Rule 2: 晚班組內不能重複（洗碗、收班不能同一人）
+                                        if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
+                                            hasConflict = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                if (canWork && !hasConflict) {
+                                    daySchedule.push({
+                                        username: worker.username,
+                                        role: "外場工讀生",
+                                        shift: shift
+                                    });
+                                    workerWorkDays[worker.username]++;
+                                    assigned = true;
+                                }
+                                
+                                workerIndex++;
+                                attempt++;
                             }
                         }
                     }
@@ -1273,7 +1296,15 @@
                 
                 const lastDayOfMonth = new Date(year, month, 0).getDate();
                 const actualEndDay = endDay || lastDayOfMonth;
+                
+                // 複製舊排班資料，但清空即將生成的日期範圍
                 const newSchedule = { ...outsideSchedule };
+                
+                // 清除指定日期範圍的舊排班數據
+                for (let day = startDay; day <= actualEndDay; day++) {
+                    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    delete newSchedule[dateString];
+                }
                 
                 // 獲取櫃檯休假日期
                 const counterVacations = [];
@@ -1448,7 +1479,7 @@
                 if (isVacation) {
                     newVacations = currentVacations.filter(d => d !== clickedDateStr);
                 } else {
-                    if(currentVacations.length >= 4) return this.uiManager.showToast('本月休假已選滿4天');
+                    if(currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
                     
                     const allUsers = this.scheduleManager.getAllUsers();
                     const otherFullTimers = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && this.FULLTIME_ROLES.includes(u.role));
@@ -1497,7 +1528,7 @@
                     if (isVacation) {
                         newVacations = currentVacations.filter(d => d !== clickedDateStr);
                     } else {
-                        if(currentVacations.length >= 4) return this.uiManager.showToast('本月休假已選滿4天');
+                        if(currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
                         
                         const allUsers = this.scheduleManager.getAllUsers();
                         const otherCounterStaff = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && u.role === "外場櫃檯");
@@ -1765,7 +1796,15 @@
                 
                 const lastDayOfMonth = new Date(year, month, 0).getDate();
                 const actualEndDay = endDay || lastDayOfMonth;
+                
+                // 複製舊排班資料，但清空即將生成的日期範圍
                 const newSchedule = { ...outsideSchedule };
+                
+                // 清除指定日期範圍的舊排班數據
+                for (let day = startDay; day <= actualEndDay; day++) {
+                    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    delete newSchedule[dateString];
+                }
                 
                 // 獲取櫃檯休假日期
                 const counterVacations = [];
@@ -1822,7 +1861,6 @@
                 
                 // 更新排班資料
                 await this.scheduleManager.updateOutsideSchedule(newSchedule);
-                this.uiManager.showToast('外場排班已生成！');
             }
 
             // 內場工讀生代班按鈕 (無變動)
@@ -2028,7 +2066,7 @@
                 } else if (this.OUTSIDE_ROLES.includes(currentUserData.role)) {
                     this.uiManager.showCalendarView();
                     if (currentUserData.role === "外場櫃檯") {
-                        this.uiManager.updateAppSubtitle("請在下方月曆選擇您的休假日 (每月最多4天)。");
+                        this.uiManager.updateAppSubtitle("請在下方月曆選擇您的休假日 (每月最多5天)。");
                     } else {
                         this.uiManager.updateAppSubtitle("請在下方月曆標示您不能上班的日子。");
                     }
@@ -2230,24 +2268,40 @@
                 });
                 
                 document.getElementById('generate-outside-schedule-btn').addEventListener('click', async () => {
-                    const month = this.calendarManager.getMonth() + 1;
-                    const year = this.calendarManager.getYear();
+                    // 使用台灣當前的實際日期，而不是月曆顯示的月份
                     const today = new Date();
                     const currentDay = today.getDate();
+                    const currentMonth = today.getMonth() + 1; // 1-12
+                    const currentYear = today.getFullYear();
+                    
+                    let targetYear, targetMonth;
                     
                     if (currentDay >= 25) {
-                        const nextMonth = month === 12 ? 1 : month + 1;
-                        const nextYear = month === 12 ? year + 1 : year;
-                        await this.generateOutsideSchedule(nextYear, nextMonth, 1, 15);
-                        this.uiManager.showToast('已排下個月1-15號的班表');
+                        // 25號之後：排下個月1-15號
+                        targetMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+                        targetYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+                        await this.generateOutsideSchedule(targetYear, targetMonth, 1, 15);
+                        this.uiManager.showToast(`已排${targetYear}年${targetMonth}月1-15號的班表`);
                     } else if (currentDay >= 10) {
-                        await this.generateOutsideSchedule(year, month, 16);
-                        this.uiManager.showToast('已排本月16-31號的班表');
+                        // 10號之後：排本月16-31號
+                        targetYear = currentYear;
+                        targetMonth = currentMonth;
+                        await this.generateOutsideSchedule(targetYear, targetMonth, 16);
+                        this.uiManager.showToast(`已排${targetYear}年${targetMonth}月16-31號的班表`);
                     } else {
-                        await this.generateOutsideSchedule(year, month);
-                        this.uiManager.showToast('已排整個月的班表');
+                        // 10號前：排整個月
+                        targetYear = currentYear;
+                        targetMonth = currentMonth;
+                        await this.generateOutsideSchedule(targetYear, targetMonth);
+                        this.uiManager.showToast(`已排${targetYear}年${targetMonth}月整月的班表`);
                     }
                     
+                    // 切換月曆到排好班的月份
+                    this.calendarManager.setCalendarDate(new Date(targetYear, targetMonth - 1, 1));
+                    
+                    // 切換到外場月曆視圖並更新按鈕樣式
+                    this.currentCalendarView = 'outside';
+                    this.updateCalendarToggleButtons();
                     this.renderOutsideCalendar();
                 });
                 
@@ -2457,7 +2511,7 @@
                     </div>
                 `;
                  const instructions = this.uiManager.calendarView.querySelector('p');
-                 instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。"; // Simplified for non-admin
+                 instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。"; // Simplified for non-admin
                  await this.renderFullCalendar();
             }
 
@@ -2482,7 +2536,7 @@
                 const instructions = this.uiManager.calendarView.querySelector('p');
                 const currentUserData = this.authManager.getCurrentUserData();
                 if (currentUserData.role === "外場櫃檯") {
-                    instructions.textContent = "請點擊日期選擇您的休假日 (每月最多4天)。";
+                    instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。";
                 } else {
                     instructions.textContent = "請點擊日期標示您不能上班的日子 / 點擊已排班日期找人代班。"; // Updated instruction
                 }
