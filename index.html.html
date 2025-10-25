@@ -1654,6 +1654,9 @@
                     
                     this.uiManager.showToast("換班成功！");
                     this.uiManager.hideCoverShiftModal();
+                    
+                    // 刷新月曆顯示最新的排班資料
+                    await this.renderOutsideCalendar();
 
                 } catch (error) {
                     console.error("換班失敗:", error);
