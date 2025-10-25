@@ -1719,6 +1719,16 @@
                 const morningVacation = this.uiManager.vacationMorningCheckbox.checked;
                 const eveningVacation = this.uiManager.vacationEveningCheckbox.checked;
 
+                // ========== 智能休假限制檢查 ==========
+                if (morningVacation || eveningVacation) {
+                    const canVacation = await this.checkOutsideWorkerVacationLimit(date, year, month, morningVacation, eveningVacation);
+                    if (!canVacation.allowed) {
+                        this.uiManager.showToast(canVacation.message);
+                        return;
+                    }
+                }
+                // =====================================
+
                 try {
                     await this.scheduleManager.updateUserVacationTime(
                         this.authManager.getCurrentUser().uid,
@@ -1752,6 +1762,110 @@
                     console.error('更新休假時間失敗:', error);
                     this.uiManager.showToast(`更新休假時間失敗：${error.message}`);
                 }
+            }
+            
+            // 檢查外場工讀生休假是否超過限制
+            async checkOutsideWorkerVacationLimit(dateString, year, month, requestMorning, requestEvening) {
+                const allUsers = this.scheduleManager.getAllUsers();
+                const allData = this.scheduleManager.getAllData();
+                const { userVacations = {}, userVacationTimes = {} } = allData;
+                
+                // 1. 獲取所有外場工讀生
+                const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
+                const totalWorkers = outsideWorkers.length;
+                
+                if (totalWorkers === 0) {
+                    return { allowed: false, message: '沒有外場工讀生' };
+                }
+                
+                // 2. 判斷該日期是平日還是假日
+                const [yearStr, monthStr, dayStr] = dateString.split('-');
+                const targetDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
+                const dayOfWeek = targetDate.getDay();
+                const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6); // 週六或週日
+                const isWeekday = (dayOfWeek >= 1 && dayOfWeek <= 5); // 週一到週五
+                
+                // 3. 檢查外場櫃檯是否休假
+                const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
+                let isCounterVacation = false;
+                for (const staff of counterStaff) {
+                    const vacationKey = `${staff.id}-${year}-${month}`;
+                    const vacations = userVacations[vacationKey] || [];
+                    if (vacations.includes(dateString)) {
+                        isCounterVacation = true;
+                        break;
+                    }
+                }
+                
+                // 4. 根據條件決定需要多少位工讀生上班
+                let requiredMorningWorkers = 0;
+                let requiredEveningWorkers = 0;
+                
+                if (isWeekday && !isCounterVacation) {
+                    // 平日 + 櫃檯上班：需要2位（洗碗、收班）- 都是晚上班次
+                    requiredMorningWorkers = 0;
+                    requiredEveningWorkers = 2;
+                } else if (isWeekday && isCounterVacation) {
+                    // 平日 + 櫃檯休假：需要4位（早櫃、晚櫃、洗碗、收班）
+                    requiredMorningWorkers = 1; // 早櫃
+                    requiredEveningWorkers = 3; // 晚櫃、洗碗、收班
+                } else if (isWeekend && !isCounterVacation) {
+                    // 假日 + 櫃檯上班：需要3位（早班、洗碗、收班）
+                    requiredMorningWorkers = 1; // 早班
+                    requiredEveningWorkers = 2; // 洗碗、收班
+                } else if (isWeekend && isCounterVacation) {
+                    // 假日 + 櫃檯休假：需要5位（早櫃、早班、晚櫃、洗碗、收班）
+                    requiredMorningWorkers = 2; // 早櫃、早班
+                    requiredEveningWorkers = 3; // 晚櫃、洗碗、收班
+                }
+                
+                // 5. 計算已經休假的工讀生人數（不包括當前用戶）
+                let morningVacationCount = 0;
+                let eveningVacationCount = 0;
+                
+                const currentUserId = this.authManager.getCurrentUser().uid;
+                
+                for (const worker of outsideWorkers) {
+                    if (worker.id === currentUserId) continue; // 不計算自己
+                    
+                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
+                    const workerVacationTimes = userVacationTimes[vacationTimeKey] || {};
+                    const vacationData = workerVacationTimes[dateString];
+                    
+                    if (vacationData) {
+                        if (vacationData.morning) {
+                            morningVacationCount++;
+                        }
+                        if (vacationData.evening) {
+                            eveningVacationCount++;
+                        }
+                    }
+                }
+                
+                // 6. 計算可用的工讀生人數
+                const availableMorningWorkers = totalWorkers - morningVacationCount - 1; // -1 是當前用戶
+                const availableEveningWorkers = totalWorkers - eveningVacationCount - 1;
+                
+                // 7. 判斷是否允許休假
+                if (requestMorning && requiredMorningWorkers > 0) {
+                    if (availableMorningWorkers < requiredMorningWorkers) {
+                        return { 
+                            allowed: false, 
+                            message: `當日早上工讀生已休滿，需要至少${requiredMorningWorkers}位工讀生上早班` 
+                        };
+                    }
+                }
+                
+                if (requestEvening && requiredEveningWorkers > 0) {
+                    if (availableEveningWorkers < requiredEveningWorkers) {
+                        return { 
+                            allowed: false, 
+                            message: `當日晚上工讀生已休滿，需要至少${requiredEveningWorkers}位工讀生上晚班` 
+                        };
+                    }
+                }
+                
+                return { allowed: true };
             }
 
             // 檢查工人是否可以在特定時間工作
