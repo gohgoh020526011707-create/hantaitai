@@ -2489,6 +2489,7 @@
                 const insideBtn = document.getElementById('inside-calendar-btn');
                 const outsideBtn = document.getElementById('outside-calendar-btn');
                 const assignmentRoleSelect = document.getElementById('assignment-role');
+            const outsideSchedulePanel = document.getElementById('outside-schedule-panel');
                 
                 // Clear existing options except the first disabled one
                 assignmentRoleSelect.innerHTML = '<option value="" disabled selected>選擇班別</option>';
@@ -2498,10 +2499,14 @@
                     insideBtn.className = 'px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold';
                     outsideBtn.className = 'px-4 py-2 rounded-md text-gray-600 hover:bg-gray-200';
                     shiftsToAdd = this.insideShifts; // Use inside shifts
+                // 管理者處於內場月曆時，隱藏外場排班管理
+                if (outsideSchedulePanel) outsideSchedulePanel.classList.add('hidden');
                 } else {
                     insideBtn.className = 'px-4 py-2 rounded-md text-gray-600 hover:bg-gray-200';
                     outsideBtn.className = 'px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold';
                     shiftsToAdd = this.outsideShifts; // Use outside shifts
+                // 管理者處於外場月曆時，顯示外場排班管理
+                if (outsideSchedulePanel) outsideSchedulePanel.classList.remove('hidden');
                 }
 
                 // Add new options
@@ -2511,6 +2516,11 @@
                     option.textContent = shift;
                     assignmentRoleSelect.appendChild(option);
                 });
+
+            // 同步更新用戶管理列表的可見區塊（只顯示當前視圖對應的人員）
+            if (typeof this.generateUserManagementLists === 'function') {
+                this.generateUserManagementLists();
+            }
             }
 
             // 生成工讀生勾選框 (無變動)
@@ -2553,6 +2563,7 @@
                 
                 // 生成內場工讀生列表
                 const insideWorkersList = document.getElementById('inside-workers-list');
+                const insideSection = insideWorkersList ? insideWorkersList.parentElement : null;
                 if (insideWorkersList) {
                     insideWorkersList.innerHTML = '';
                     if (insideWorkers.length === 0) {
@@ -2583,6 +2594,7 @@
                 
                 // 生成外場工讀生列表
                 const outsideWorkersList = document.getElementById('outside-workers-list');
+                const outsideSection = outsideWorkersList ? outsideWorkersList.parentElement : null;
                 if (outsideWorkersList) {
                     outsideWorkersList.innerHTML = '';
                     if (outsideWorkers.length === 0) {
@@ -2609,6 +2621,15 @@
                             outsideWorkersList.appendChild(workerDiv);
                         });
                     }
+                }
+
+                // 根據目前月曆視圖只顯示對應區塊
+                if (this.currentCalendarView === 'inside') {
+                    if (insideSection) insideSection.classList.remove('hidden');
+                    if (outsideSection) outsideSection.classList.add('hidden');
+                } else {
+                    if (insideSection) insideSection.classList.add('hidden');
+                    if (outsideSection) outsideSection.classList.remove('hidden');
                 }
             }
 
