@@ -3141,8 +3141,14 @@
                         
                         let isShortage = false;
                         if (isCounterVacation) {
-                            // 櫃檯休假: 應有 5 班 (早櫃, 早班, 晚櫃, 洗碗, 收班)
-                            if (numShifts < 5) { isShortage = true; }
+                            // 櫃檯休假: 平日應有 4 班、假日應有 5 班
+                            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                                // 週末: 應有 5 班 (早櫃, 早班, 晚櫃, 洗碗, 收班)
+                                if (numShifts < 5) { isShortage = true; }
+                            } else {
+                                // 平日: 應有 4 班 (早櫃, 晚櫃, 洗碗, 收班)
+                                if (numShifts < 4) { isShortage = true; }
+                            }
                         } else {
                             // 櫃檯未休假
                             if (dayOfWeek === 0 || dayOfWeek === 6) { 
