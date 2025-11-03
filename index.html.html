@@ -1138,14 +1138,16 @@
                 const daySchedule = [];
                 
                 if (counterVacation) {
-                    // 櫃檯休假，需要安排 早櫃, 早班, 晚櫃, 洗碗, 收班
+                    // 櫃檯休假：平日不排「早班」，假日維持含「早班」
                     const dayAvailableWorkers = availableWorkers.filter(worker => 
                         !workerUnavailability[worker.username].includes(dateString)
                     );
                     
                     if (dayAvailableWorkers.length > 0) {
-                        // 總共5個班別
-                        const shifts = ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
+                        // 平日（週一至週五）：早櫃、晚櫃、洗碗、收班；假日：含早班共五班
+                        const shifts = (dayOfWeek >= 1 && dayOfWeek <= 5)
+                            ? ["早櫃", "晚櫃", "洗碗", "收班"]
+                            : ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
                         
                         // 平均分配班別給可用的工讀生
                         const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
@@ -3443,4 +3445,3 @@
     </script>
 </body>
 </html>
-
