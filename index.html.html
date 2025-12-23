@@ -640,9 +640,16 @@
             }
 
             async updateUserVacationTime(userId, year, month, date, vacationData) {
-                const vacationTimeKey = `${userId}-${year}-${month}`;
+                // month 可能帶有前導 0，統一轉為數字，避免 key 不一致
+                const numericMonth = parseInt(month, 10);
+                const normalizedKey = `${userId}-${year}-${numericMonth}`;
+                const legacyKey = `${userId}-${year}-${String(numericMonth).padStart(2, '0')}`;
                 const currentVacationTimes = this.allData.userVacationTimes || {};
-                const userVacationTimes = currentVacationTimes[vacationTimeKey] || {};
+
+                // 合併舊的前導 0 key 與新的標準 key，避免舊資料遺失
+                const legacyData = currentVacationTimes[legacyKey] || {};
+                const normalizedData = currentVacationTimes[normalizedKey] || {};
+                const userVacationTimes = { ...legacyData, ...normalizedData };
                 
                 // 如果兩個時段都不休假，則刪除該日期的記錄
                 if (!vacationData.morning && !vacationData.evening) {
@@ -652,7 +659,7 @@
                 }
                 
                 await setDoc(doc(this.db, "scheduleData", "main"), { 
-                    userVacationTimes: { ...currentVacationTimes, [vacationTimeKey]: userVacationTimes } 
+                    userVacationTimes: { ...currentVacationTimes, [normalizedKey]: userVacationTimes } 
                 }, { merge: true });
             }
 
@@ -1321,10 +1328,14 @@
                 const workerUnavailability = {};
                 const workerVacationTimes = {};
                 outsideWorkers.forEach(worker => {
-                    const availabilityKey = `${worker.id}-${year}-${month}`;
-                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
+                    const numericMonth = parseInt(month, 10);
+                    const availabilityKey = `${worker.id}-${year}-${numericMonth}`;
+                    const vacationTimeKey = `${worker.id}-${year}-${numericMonth}`;
+                    const legacyVacationTimeKey = `${worker.id}-${year}-${String(numericMonth).padStart(2, '0')}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
-                    workerVacationTimes[worker.username] = userVacationTimes[vacationTimeKey] || {};
+                    workerVacationTimes[worker.username] = userVacationTimes[vacationTimeKey] 
+                        || userVacationTimes[legacyVacationTimeKey] 
+                        || {};
                 });
                 
                 // 計算每個工讀生的工作天數
@@ -1698,12 +1709,17 @@
 
             // 顯示休假時間選擇
             showVacationTimeModal(date, year, month) {
-                this.pendingVacationDate = { date, year, month };
+                // month 可能含前導 0，轉為數字避免 key 不一致
+                const numericMonth = parseInt(month, 10);
+                this.pendingVacationDate = { date, year, month: numericMonth };
                 
                 // 檢查是否有現有的休假數據
                 const allData = this.scheduleManager.getAllData();
-                const vacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${month}`;
-                const userVacationTimes = allData.userVacationTimes?.[vacationTimeKey] || {};
+                const vacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${numericMonth}`;
+                const legacyVacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${String(numericMonth).padStart(2, '0')}`;
+                const userVacationTimes = allData.userVacationTimes?.[vacationTimeKey] 
+                    || allData.userVacationTimes?.[legacyVacationTimeKey] 
+                    || {};
                 const currentVacationData = userVacationTimes[date];
                 
                 this.uiManager.showVacationTimeModal(date, currentVacationData);
@@ -1829,8 +1845,12 @@
                 for (const worker of outsideWorkers) {
                     if (worker.id === currentUserId) continue; // 不計算自己
                     
-                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
-                    const workerVacationTimes = userVacationTimes[vacationTimeKey] || {};
+                    const numericMonth = parseInt(month, 10);
+                    const vacationTimeKey = `${worker.id}-${year}-${numericMonth}`;
+                    const legacyVacationTimeKey = `${worker.id}-${year}-${String(numericMonth).padStart(2, '0')}`;
+                    const workerVacationTimes = userVacationTimes[vacationTimeKey] 
+                        || userVacationTimes[legacyVacationTimeKey] 
+                        || {};
                     const vacationData = workerVacationTimes[dateString];
                     
                     if (vacationData) {
@@ -1938,10 +1958,14 @@
                 const workerUnavailability = {};
                 const workerVacationTimes = {};
                 availableWorkers.forEach(worker => {
-                    const availabilityKey = `${worker.id}-${year}-${month}`;
-                    const vacationTimeKey = `${worker.id}-${year}-${month}`;
+                    const numericMonth = parseInt(month, 10);
+                    const availabilityKey = `${worker.id}-${year}-${numericMonth}`;
+                    const vacationTimeKey = `${worker.id}-${year}-${numericMonth}`;
+                    const legacyVacationTimeKey = `${worker.id}-${year}-${String(numericMonth).padStart(2, '0')}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
-                    workerVacationTimes[worker.username] = allData.userVacationTimes?.[vacationTimeKey] || {};
+                    workerVacationTimes[worker.username] = allData.userVacationTimes?.[vacationTimeKey] 
+                        || allData.userVacationTimes?.[legacyVacationTimeKey] 
+                        || {};
                 });
                 
                 // 計算每個工讀生的工作天數
@@ -3275,10 +3299,13 @@
                                 selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
                         } else if (currentUserData.role === "外場工讀生") {
-                            const availabilityKey = `${currentUserData.uid}-${year}-${month+1}`;
-                            const vacationTimeKey = `${currentUserData.uid}-${year}-${month+1}`;
+                            const monthNumber = month + 1;
+                            const availabilityKey = `${currentUserData.uid}-${year}-${monthNumber}`;
+                            const vacationTimeKey = `${currentUserData.uid}-${year}-${monthNumber}`;
+                            const legacyVacationTimeKey = `${currentUserData.uid}-${year}-${String(monthNumber).padStart(2, '0')}`;
                             const isUnavailable = (userAvailability[availabilityKey] || []).includes(dateString);
-                            const vacationData = userVacationTimes[vacationTimeKey]?.[dateString];
+                            const vacationData = userVacationTimes[vacationTimeKey]?.[dateString] 
+                                || userVacationTimes[legacyVacationTimeKey]?.[dateString];
                             const isWorking = workingUsers.some(w => w.username === currentUserData.username);
 
                             if (isWorking) { // Check if working first
