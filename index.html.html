@@ -1016,10 +1016,12 @@
                 this.insideShifts = [
                     "備菜班 (早)", "備菜班 (晚)", "備菜班 (全日)",
                     "炸爐班 (早)", "炸爐班 (晚)", "炸爐班 (全日)",
-                    "收班" // 内場工讀生
+                    "收班", // 内場工讀生（向後兼容）
+                    "收班（內場）" // 内場工讀生
                 ];
                 this.outsideShifts = [
-                    "早櫃", "早班", "晚櫃", "洗碗", "收班", // 外場工讀生
+                    "早櫃", "早班", "晚櫃", "洗碗", "收班", // 外場工讀生（向後兼容）
+                    "收班（外場）", // 外場工讀生
                     "櫃檯" // 外場櫃檯
                 ];
             }
@@ -2047,15 +2049,24 @@
                 }
             }
 
-            // 手動新增排班 (無變動)
+            // 手動新增排班
             async handleManualAssignment(e) {
                 e.preventDefault();
                 const form = document.getElementById('manual-assignment-form');
                 const date = form.querySelector('#assignment-date').value;
                 const username = form.querySelector('#assignment-user').value.trim();
-                const assignedShift = form.querySelector('#assignment-role').value; // Reads the dynamically updated value
+                let assignedShift = form.querySelector('#assignment-role').value; // Reads the dynamically updated value
 
                 if (!date || !username || !assignedShift) return this.uiManager.showToast('所有欄位皆為必填。');
+
+                // 特殊處理：如果是「收班」，根據當前視圖保存不同的值
+                if (assignedShift === '收班') {
+                    if (this.currentCalendarView === 'inside') {
+                        assignedShift = '收班（內場）';
+                    } else {
+                        assignedShift = '收班（外場）';
+                    }
+                }
 
                 const allData = this.scheduleManager.getAllData();
                 const { manualAssignments = {} } = allData;
@@ -2534,6 +2545,11 @@
 
                 // Add new options
                 shiftsToAdd.forEach(shift => {
+                    // 跳過未標記的「收班」，因為我們已經有「收班（內場）」或「收班（外場）」了
+                    if (shift === '收班') {
+                        return; // 跳過，避免重複
+                    }
+                    
                     const option = document.createElement('option');
                     option.value = shift;
                     option.textContent = shift;
@@ -2807,14 +2823,20 @@
                     if (dailySchedule[dateString] && assignmentsArray.length > 0) {
                          assignmentsArray.forEach(assignment => {
                             // Check if this shift belongs to the inside view
-                            if (this.insideShifts.includes(assignment.assignedShift)) {
+                            const assignedShift = assignment.assignedShift;
+                            
+                            // 內場月曆：只顯示內場的收班，不顯示外場的收班
+                            if (assignedShift === '收班（外場）') {
+                                return; // 跳過外場的收班
+                            }
+                            
+                            if (this.insideShifts.includes(assignedShift)) {
                                 let role = '';
                                 let timeSlot = 'FullDay';
-                                const assignedShift = assignment.assignedShift;
 
                                 if (assignedShift.includes('備菜班')) role = '内場備菜班';
                                 else if (assignedShift.includes('炸爐班')) role = '内場炸爐班';
-                                else if (assignedShift === '收班') role = '内場工讀生';
+                                else if (assignedShift === '收班' || assignedShift === '收班（內場）') role = '内場工讀生';
 
                                 if (assignedShift.includes('早')) timeSlot = 'AM';
                                 else if (assignedShift.includes('晚')) timeSlot = 'PM';
@@ -2900,7 +2922,7 @@
                         // 3. Check 收班 (PT availability or manual)
                         const isShoubanCovered = workingUsers.some(w => 
                             (w.role === this.PART_TIMER_ROLE && w.timeSlot === 'FullDay' && !w.isCover) || // From userAvailability
-                            (w.isManual && w.assignedShift === '收班') // Manual '收班'
+                            (w.isManual && (w.assignedShift === '收班' || w.assignedShift === '收班（內場）')) // Manual '收班' or '收班（內場）'
                         );
                         
                         if (!(isBekaiCovered && isJaluCovered && isShoubanCovered)) {
@@ -2936,7 +2958,7 @@
                                     if (assignedShift.includes('炸爐班 (早)')) return 4;
                                     if (assignedShift.includes('炸爐班 (晚)')) return 5;
                                     if (assignedShift.includes('炸爐班 (全日)')) return 6;
-                                    if (assignedShift === '收班') return 7;
+                                    if (assignedShift === '收班' || assignedShift === '收班（內場）') return 7;
                                 }
 
                                 // Handle non-manual shifts
@@ -2971,7 +2993,7 @@
                                         else if (assignedShift === '炸爐班 (早)') displayLabel = '(早炸)';
                                         else if (assignedShift === '炸爐班 (晚)') displayLabel = '(晚炸)';
                                         else if (assignedShift === '炸爐班 (全日)') displayLabel = '(炸)';
-                                        else if (assignedShift === '收班') displayLabel = '(收)';
+                                        else if (assignedShift === '收班' || assignedShift === '收班（內場）') displayLabel = '(收)';
                                     } else if (isCover) { // Handle cover shift labels
                                         if (role === '内場備菜班') displayLabel = `(${timeSlot === 'AM' ? '早備' : '晚備'})`;
                                         else if (role === '内場炸爐班') displayLabel = `(${timeSlot === 'AM' ? '早炸' : '晚炸'})`;
@@ -3090,16 +3112,23 @@
                     if (dailySchedule[dateString] && assignmentsArray.length > 0) {
                          assignmentsArray.forEach(assignment => {
                             // Check if this shift belongs to the outside view
-                            if (this.outsideShifts.includes(assignment.assignedShift)) {
+                            const assignedShift = assignment.assignedShift;
+                            
+                            // 外場月曆：只顯示外場的收班，不顯示內場的收班
+                            if (assignedShift === '收班（內場）') {
+                                return; // 跳過內場的收班
+                            }
+                            
+                            if (this.outsideShifts.includes(assignedShift)) {
                                 let role = "外場工讀生"; // Default
-                                if (assignment.assignedShift === "櫃檯") {
+                                if (assignedShift === "櫃檯") {
                                     role = "外場櫃檯";
                                 }
                                 
                                 dailySchedule[dateString].push({ 
                                     username: assignment.username, 
                                     role: role, 
-                                    shift: assignment.assignedShift, // Use the assigned shift directly
+                                    shift: assignedShift, // Use the assigned shift directly
                                     isManual: true // Mark as manual
                                 });
                             }
