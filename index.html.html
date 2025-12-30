@@ -3259,7 +3259,8 @@
                                     case "早班": return 3;
                                     case "晚櫃": return 4;
                                     case "洗碗": return 5;
-                                    case "收班": return 6;
+                                    case "收班":
+                                    case "收班（外場）": return 6;
                                 }
                                 return 99; // Other/Unknown
                             };
@@ -3289,6 +3290,7 @@
                                         colorClass = 'font-semibold text-blue-800';
                                         break;
                                     case "收班":
+                                    case "收班（外場）":
                                         displayLabel = '(收)';
                                         colorClass = 'font-semibold text-green-800';
                                         break;
