@@ -131,7 +131,7 @@
                         </button>
                     </div>
                 </div>
-                    <p id="app-subtitle" class="mt-2 text-gray-500 text-sm md:text-base">一個讓團隊合作更順暢的排班解決方案。</p>
+                <p id="app-subtitle" class="mt-2 text-gray-500 text-sm md:text-base">一個讓團隊合作更順暢的排班解決方案。</p>
             </header>
 
             <main>
@@ -658,9 +658,26 @@
                     userVacationTimes[date] = vacationData;
                 }
                 
+                // 更新數據庫，同時更新 normalizedKey 並清理 legacyKey（如果存在）
+                const updatedVacationTimes = { ...currentVacationTimes };
+                updatedVacationTimes[normalizedKey] = userVacationTimes;
+                // 如果 legacyKey 存在且與 normalizedKey 不同，也要更新它以保持一致性
+                if (legacyKey !== normalizedKey && currentVacationTimes[legacyKey]) {
+                    const updatedLegacyData = { ...currentVacationTimes[legacyKey] };
+                    if (!vacationData.morning && !vacationData.evening) {
+                        delete updatedLegacyData[date];
+                    } else {
+                        updatedLegacyData[date] = vacationData;
+                    }
+                    updatedVacationTimes[legacyKey] = updatedLegacyData;
+                }
+                
                 await setDoc(doc(this.db, "scheduleData", "main"), { 
-                    userVacationTimes: { ...currentVacationTimes, [normalizedKey]: userVacationTimes } 
+                    userVacationTimes: updatedVacationTimes
                 }, { merge: true });
+                
+                // 立即更新本地數據，確保月曆能立即反映變更
+                this.allData.userVacationTimes = updatedVacationTimes;
             }
 
             async updateAdminHolidays(holidays) {
@@ -2109,10 +2126,32 @@
                     ? dayAssignmentsData 
                     : Object.values(dayAssignmentsData);
                 
-                const targetIndex = dayAssignments.findIndex(a => a.username === username && a.assignedShift === assignedShift);
+                console.log('嘗試刪除:', { dateString, username, assignedShift });
+                console.log('當日所有排班記錄:', dayAssignments);
+                
+                // 改進匹配邏輯：處理「收班」的不同變體和精確匹配
+                const targetIndex = dayAssignments.findIndex(a => {
+                    if (a.username !== username) return false;
+                    
+                    // 精確匹配
+                    if (a.assignedShift === assignedShift) {
+                        console.log('找到精確匹配:', a);
+                        return true;
+                    }
+                    
+                    // 處理「收班」的不同變體
+                    const shiftVariants = ['收班', '收班（內場）', '收班（外場）'];
+                    const isClosingShift = shiftVariants.includes(a.assignedShift) && shiftVariants.includes(assignedShift);
+                    if (isClosingShift) {
+                        console.log('找到收班變體匹配:', a);
+                        return true;
+                    }
+                    
+                    return false;
+                });
                 
                 if (targetIndex === -1) {
-                    console.log('找不到匹配的排班記錄:', { dateString, username, assignedShift });
+                    console.log('找不到匹配的排班記錄:', { dateString, username, assignedShift, availableAssignments: dayAssignments });
                     this.uiManager.showToast('找不到匹配的排班記錄。');
                     return;
                 }
@@ -2183,6 +2222,15 @@
                         coverSignups: newCoverSignups
                     });
                     console.log('所有欄位更新成功');
+                    
+                    // 重新渲染月曆以反映刪除結果
+                    if (this.authManager.getCurrentUserData()?.role === this.ADMIN_ROLE) {
+                        if (this.currentCalendarView === 'inside') {
+                            await this.renderFullCalendar();
+                        } else {
+                            await this.renderOutsideCalendar();
+                        }
+                    }
                 } catch (error) {
                     console.error('所有欄位更新失敗:', error);
                     this.uiManager.showToast('更新資料失敗，請稍後再試。');
@@ -3529,6 +3577,4 @@
     </script>
 </body>
 </html>
-
-
 
