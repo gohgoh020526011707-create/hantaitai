@@ -2118,12 +2118,11 @@
                 form.reset();
             }
 
-            // 刪除手動排班 (無變動)
+            // 刪除手動排班
             async handleDeleteManualAssignment(dateString, username, assignedShift) {
                 console.log('開始刪除手動排班:', { dateString, username, assignedShift });
                 
                 if (this.authManager.getCurrentUserData()?.role !== this.ADMIN_ROLE) {
-                    console.log('非管理者嘗試刪除，被拒絕');
                     this.uiManager.showToast('僅管理者可刪除此班次。');
                     return;
                 }
@@ -2132,7 +2131,6 @@
                 const { manualAssignments = {}, userAvailability = {}, userVacations = {}, coverSignups = {} } = allData;
                 
                 if (!manualAssignments[dateString]) {
-                    console.log('該日期沒有手動排班資料');
                     this.uiManager.showToast('該日期沒有手動排班資料。');
                     return;
                 }
@@ -2142,16 +2140,12 @@
                     ? dayAssignmentsData 
                     : Object.values(dayAssignmentsData);
                 
-                console.log('嘗試刪除:', { dateString, username, assignedShift });
-                console.log('當日所有排班記錄:', dayAssignments);
-                
                 // 改進匹配邏輯：處理「收班」的不同變體和精確匹配
                 const targetIndex = dayAssignments.findIndex(a => {
                     if (a.username !== username) return false;
                     
                     // 精確匹配
                     if (a.assignedShift === assignedShift) {
-                        console.log('找到精確匹配:', a);
                         return true;
                     }
                     
@@ -2159,7 +2153,6 @@
                     const shiftVariants = ['收班', '收班（內場）', '收班（外場）'];
                     const isClosingShift = shiftVariants.includes(a.assignedShift) && shiftVariants.includes(assignedShift);
                     if (isClosingShift) {
-                        console.log('找到收班變體匹配:', a);
                         return true;
                     }
                     
@@ -2167,21 +2160,30 @@
                 });
                 
                 if (targetIndex === -1) {
-                    console.log('找不到匹配的排班記錄:', { dateString, username, assignedShift, availableAssignments: dayAssignments });
                     this.uiManager.showToast('找不到匹配的排班記錄。');
                     return;
                 }
                 
+                // 複製並移除該筆資料
                 const newManualAssignments = { ...manualAssignments };
                 const updatedDayAssignments = [...dayAssignments];
                 updatedDayAssignments.splice(targetIndex, 1); 
                 
-                if (updatedDayAssignments.length > 0) {
-                    newManualAssignments[dateString] = JSON.parse(JSON.stringify(updatedDayAssignments));
-                } else {
-                    delete newManualAssignments[dateString];
-                }
+                // ============================================================
+                // === [修復 BUG] 核心修改位置 ===
+                // ============================================================
+                // 舊寫法：
+                // if (updatedDayAssignments.length > 0) { ... } else { delete ... }
+                // 導致最後一筆刪不掉。
+                
+                // 新寫法：
+                // 直接把結果 (updatedDayAssignments) 寫回去，即使它是空陣列 []。
+                // 這樣 Firebase 才會收到「將此日期設為空」的指令，覆蓋掉原本的資料。
+                newManualAssignments[dateString] = updatedDayAssignments;
+                
+                // ============================================================
 
+                // --- 以下為連動清理邏輯 (保持不變) ---
                 const allUsers = this.scheduleManager.getAllUsers();
                 const targetUser = allUsers.find(u => u.username === username);
 
@@ -2195,17 +2197,14 @@
                 let newCoverSignups = { ...currentCoverSignups };
 
                 if (targetUser) {
-                    // Consider adjusting this logic if outside roles need different cleanup
                     if (targetUser.role === this.PART_TIMER_ROLE || targetUser.role === "外場工讀生") { 
                         const availabilityKey = `${targetUser.id}-${year}-${month}`;
                         const currentAvail = newUserAvailability[availabilityKey] || [];
                         const filteredAvail = currentAvail.filter(d => d !== dateString);
-                        if (filteredAvail.length > 0) {
-                            newUserAvailability[availabilityKey] = filteredAvail;
-                        } else {
-                            delete newUserAvailability[availabilityKey];
-                        }
+                        // 這裡為了保險起見，我們也改用寫入空陣列的方式，避免同樣的 bug 發生在 availability
+                        newUserAvailability[availabilityKey] = filteredAvail;
                         
+                        // 清理代班
                         const coverKeysToDelete = [];
                         Object.keys(newCoverSignups).forEach(signupId => {
                             const parts = signupId.split('-');
@@ -2216,6 +2215,7 @@
                                 }
                             }
                         });
+                        // 注意：coverSignups 是一層物件，這裡用 delete 是安全的，因為我們是更新整個 coverSignups 物件
                         coverKeysToDelete.forEach(key => delete newCoverSignups[key]);
                         
                     } else if (this.FULLTIME_ROLES.includes(targetUser.role) || targetUser.role === "外場櫃檯") {
@@ -2226,9 +2226,6 @@
                         }
                     }
                 }
-
-                console.log('取消代班前:', currentCoverSignups);
-                console.log('取消代班後:', newCoverSignups);
                 
                 try {
                     await this.scheduleManager.updateMultiple({
@@ -2237,9 +2234,8 @@
                         userVacations: newUserVacations,
                         coverSignups: newCoverSignups
                     });
-                    console.log('所有欄位更新成功');
                     
-                    // 重新渲染月曆以反映刪除結果
+                    // 重新渲染月曆
                     if (this.authManager.getCurrentUserData()?.role === this.ADMIN_ROLE) {
                         if (this.currentCalendarView === 'inside') {
                             await this.renderFullCalendar();
@@ -2247,13 +2243,11 @@
                             await this.renderOutsideCalendar();
                         }
                     }
+                    this.uiManager.showToast('手動排班已刪除！');
                 } catch (error) {
                     console.error('所有欄位更新失敗:', error);
                     this.uiManager.showToast('更新資料失敗，請稍後再試。');
-                    return;
                 }
-
-                this.uiManager.showToast('手動排班已刪除，已同步清理當日上班顯示！');
             }
 
             // 主渲染邏輯 (無變動)
