@@ -651,24 +651,27 @@
                 const normalizedData = currentVacationTimes[normalizedKey] || {};
                 const userVacationTimes = { ...legacyData, ...normalizedData };
                 
-                // 如果兩個時段都不休假，則刪除該日期的記錄
-                if (!vacationData.morning && !vacationData.evening) {
-                    delete userVacationTimes[date];
-                } else {
-                    userVacationTimes[date] = vacationData;
-                }
+                // ============================================================
+                // === [修復 BUG] 核心修改位置 ===
+                // ============================================================
+                // 舊寫法：delete userVacationTimes[date]; 
+                // 問題：delete 之後，firebase merge 會忽略這個欄位，導致資料庫舊的 true 沒被洗掉。
                 
-                // 更新數據庫，同時更新 normalizedKey 並清理 legacyKey（如果存在）
+                // 新寫法：不管是不是 false，都直接寫入。
+                // 這樣資料庫才會明確收到 { morning: false, evening: false } 的指令，去覆蓋原本的 true。
+                userVacationTimes[date] = vacationData;
+                
+                // ============================================================
+                
+                // 準備要更新到資料庫的大物件
                 const updatedVacationTimes = { ...currentVacationTimes };
                 updatedVacationTimes[normalizedKey] = userVacationTimes;
-                // 如果 legacyKey 存在且與 normalizedKey 不同，也要更新它以保持一致性
+                
+                // 如果 legacyKey 存在且與 normalizedKey 不同，也要同步更新它
+                // 這是為了保持資料一致性，避免舊版程式讀取錯誤
                 if (legacyKey !== normalizedKey && currentVacationTimes[legacyKey]) {
                     const updatedLegacyData = { ...currentVacationTimes[legacyKey] };
-                    if (!vacationData.morning && !vacationData.evening) {
-                        delete updatedLegacyData[date];
-                    } else {
-                        updatedLegacyData[date] = vacationData;
-                    }
+                    updatedLegacyData[date] = vacationData; // 同樣強制寫入 false
                     updatedVacationTimes[legacyKey] = updatedLegacyData;
                 }
                 
@@ -1773,6 +1776,19 @@
                         date,
                         { morning: morningVacation, evening: eveningVacation }
                     );
+                    const allData = this.scheduleManager.getAllData();
+                    const availabilityKey = `${this.authManager.getCurrentUser().uid}-${year}-${month}`;
+                    const currentAvailability = allData.userAvailability?.[availabilityKey] || [];
+                    
+                    if (currentAvailability.includes(date)) {
+                        const newAvailability = currentAvailability.filter(d => d !== date);
+                        await this.scheduleManager.updateUserAvailability(
+                            this.authManager.getCurrentUser().uid, 
+                            year, 
+                            month, 
+                            newAvailability
+                        );
+                    }
 
                     let message = '';
                     if (morningVacation && eveningVacation) {
