@@ -672,12 +672,57 @@
                     updatedVacationTimes[legacyKey] = updatedLegacyData;
                 }
                 
+                // 同步更新舊系統的 userAvailability 記錄，避免顯示不一致
+                // 當取消休假時（兩個時段都不休假），從 userAvailability 中移除該日期
+                // 當設定休假時（至少有一個時段休假），在 userAvailability 中添加該日期（如果不存在）
+                const currentUserAvailability = this.allData.userAvailability || {};
+                const availabilityKey = `${userId}-${year}-${numericMonth}`;
+                const legacyAvailabilityKey = `${userId}-${year}-${String(numericMonth).padStart(2, '0')}`;
+                const updatedUserAvailability = { ...currentUserAvailability };
+                
+                // 處理 normalizedKey
+                const availabilityList = [...(updatedUserAvailability[availabilityKey] || [])];
+                if (!vacationData.morning && !vacationData.evening) {
+                    // 取消休假時，從 userAvailability 中移除該日期
+                    const index = availabilityList.indexOf(date);
+                    if (index > -1) {
+                        availabilityList.splice(index, 1);
+                    }
+                } else {
+                    // 設定休假時，在 userAvailability 中添加該日期（如果不存在）
+                    if (!availabilityList.includes(date)) {
+                        availabilityList.push(date);
+                    }
+                }
+                updatedUserAvailability[availabilityKey] = availabilityList;
+                
+                // 處理 legacyKey（如果存在且與 normalizedKey 不同）
+                if (legacyAvailabilityKey !== availabilityKey) {
+                    const legacyAvailabilityList = [...(updatedUserAvailability[legacyAvailabilityKey] || [])];
+                    if (!vacationData.morning && !vacationData.evening) {
+                        // 取消休假時，從 userAvailability 中移除該日期
+                        const index = legacyAvailabilityList.indexOf(date);
+                        if (index > -1) {
+                            legacyAvailabilityList.splice(index, 1);
+                        }
+                    } else {
+                        // 設定休假時，在 userAvailability 中添加該日期（如果不存在）
+                        if (!legacyAvailabilityList.includes(date)) {
+                            legacyAvailabilityList.push(date);
+                        }
+                    }
+                    updatedUserAvailability[legacyAvailabilityKey] = legacyAvailabilityList;
+                }
+                
+                // 同時更新 userVacationTimes 和 userAvailability
                 await setDoc(doc(this.db, "scheduleData", "main"), { 
-                    userVacationTimes: updatedVacationTimes
+                    userVacationTimes: updatedVacationTimes,
+                    userAvailability: updatedUserAvailability
                 }, { merge: true });
                 
                 // 立即更新本地數據，確保月曆能立即反映變更
                 this.allData.userVacationTimes = updatedVacationTimes;
+                this.allData.userAvailability = updatedUserAvailability;
             }
 
             async updateAdminHolidays(holidays) {
