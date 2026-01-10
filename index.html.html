@@ -296,14 +296,12 @@
             setDoc, 
             getDoc,
             deleteDoc,
-            updateDoc,
             onSnapshot,
             collection,
             query,
             where,
             writeBatch,
-            getDocs,
-            deleteField
+            getDocs
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // ===================================================================================
@@ -647,190 +645,39 @@
                 const normalizedKey = `${userId}-${year}-${numericMonth}`;
                 const legacyKey = `${userId}-${year}-${String(numericMonth).padStart(2, '0')}`;
                 const currentVacationTimes = this.allData.userVacationTimes || {};
-                const currentUserAvailability = this.allData.userAvailability || {};
 
-                // 準備更新的數據
+                // 合併舊的前導 0 key 與新的標準 key，避免舊資料遺失
+                const legacyData = currentVacationTimes[legacyKey] || {};
+                const normalizedData = currentVacationTimes[normalizedKey] || {};
+                const userVacationTimes = { ...legacyData, ...normalizedData };
+                
+                // 如果兩個時段都不休假，則刪除該日期的記錄
+                if (!vacationData.morning && !vacationData.evening) {
+                    delete userVacationTimes[date];
+                } else {
+                    userVacationTimes[date] = vacationData;
+                }
+                
+                // 更新數據庫，同時更新 normalizedKey 並清理 legacyKey（如果存在）
                 const updatedVacationTimes = { ...currentVacationTimes };
-                const updatedUserAvailability = { ...currentUserAvailability };
-
-                // 處理 normalizedKey 的 userVacationTimes
-                const normalizedData = { ...(currentVacationTimes[normalizedKey] || {}) };
-                if (!vacationData.morning && !vacationData.evening) {
-                    // 取消休假時，刪除該日期的記錄
-                    delete normalizedData[date];
-                    // 如果該月份的記錄變成空物件，則刪除整個月份的 key
-                    if (Object.keys(normalizedData).length === 0) {
-                        delete updatedVacationTimes[normalizedKey];
-                    } else {
-                        updatedVacationTimes[normalizedKey] = normalizedData;
-                    }
-                } else {
-                    // 設定休假時，更新該日期的記錄
-                    normalizedData[date] = vacationData;
-                    updatedVacationTimes[normalizedKey] = normalizedData;
-                }
-
-                // 處理 legacyKey 的 userVacationTimes（如果存在且與 normalizedKey 不同）
+                updatedVacationTimes[normalizedKey] = userVacationTimes;
+                // 如果 legacyKey 存在且與 normalizedKey 不同，也要更新它以保持一致性
                 if (legacyKey !== normalizedKey && currentVacationTimes[legacyKey]) {
-                    const legacyData = { ...currentVacationTimes[legacyKey] };
+                    const updatedLegacyData = { ...currentVacationTimes[legacyKey] };
                     if (!vacationData.morning && !vacationData.evening) {
-                        delete legacyData[date];
-                        // 如果該月份的記錄變成空物件，則刪除整個月份的 key
-                        if (Object.keys(legacyData).length === 0) {
-                            delete updatedVacationTimes[legacyKey];
-                        } else {
-                            updatedVacationTimes[legacyKey] = legacyData;
-                        }
+                        delete updatedLegacyData[date];
                     } else {
-                        legacyData[date] = vacationData;
-                        updatedVacationTimes[legacyKey] = legacyData;
+                        updatedLegacyData[date] = vacationData;
                     }
-                }
-
-                // 處理 normalizedKey 的 userAvailability
-                const availabilityKey = `${userId}-${year}-${numericMonth}`;
-                if (!vacationData.morning && !vacationData.evening) {
-                    // 取消休假時，從 userAvailability 中移除該日期
-                    if (currentUserAvailability[availabilityKey]) {
-                        let availabilityList = [...currentUserAvailability[availabilityKey]];
-                        const index = availabilityList.indexOf(date);
-                        if (index > -1) {
-                            availabilityList.splice(index, 1);
-                        }
-                        // 如果列表變成空陣列，則刪除整個月份的 key
-                        if (availabilityList.length === 0) {
-                            delete updatedUserAvailability[availabilityKey];
-                        } else {
-                            updatedUserAvailability[availabilityKey] = availabilityList;
-                        }
-                    }
-                    // 如果原本就不存在，不需要做任何事情
-                } else {
-                    // 設定休假時，在 userAvailability 中添加該日期（如果不存在）
-                    let availabilityList = [...(currentUserAvailability[availabilityKey] || [])];
-                    if (!availabilityList.includes(date)) {
-                        availabilityList.push(date);
-                    }
-                    updatedUserAvailability[availabilityKey] = availabilityList;
-                }
-
-                // 處理 legacyKey 的 userAvailability（如果存在且與 normalizedKey 不同）
-                const legacyAvailabilityKey = `${userId}-${year}-${String(numericMonth).padStart(2, '0')}`;
-                if (legacyAvailabilityKey !== availabilityKey) {
-                    if (!vacationData.morning && !vacationData.evening) {
-                        // 取消休假時，從 userAvailability 中移除該日期
-                        if (currentUserAvailability[legacyAvailabilityKey]) {
-                            let legacyAvailabilityList = [...currentUserAvailability[legacyAvailabilityKey]];
-                            const index = legacyAvailabilityList.indexOf(date);
-                            if (index > -1) {
-                                legacyAvailabilityList.splice(index, 1);
-                            }
-                            // 如果列表變成空陣列，則刪除整個月份的 key
-                            if (legacyAvailabilityList.length === 0) {
-                                delete updatedUserAvailability[legacyAvailabilityKey];
-                            } else {
-                                updatedUserAvailability[legacyAvailabilityKey] = legacyAvailabilityList;
-                            }
-                        }
-                        // 如果原本就不存在，不需要做任何事情
-                    } else {
-                        // 設定休假時，在 userAvailability 中添加該日期（如果不存在）
-                        if (currentUserAvailability[legacyAvailabilityKey]) {
-                            let legacyAvailabilityList = [...currentUserAvailability[legacyAvailabilityKey]];
-                            if (!legacyAvailabilityList.includes(date)) {
-                                legacyAvailabilityList.push(date);
-                            }
-                            updatedUserAvailability[legacyAvailabilityKey] = legacyAvailabilityList;
-                        }
-                        // 如果原本就不存在，不需要創建新的 legacy key（優先使用 normalizedKey）
-                    }
-                }
-
-                // 使用 updateDoc 和 deleteField 來正確刪除空物件
-                const scheduleDataRef = doc(this.db, "scheduleData", "main");
-                const updateData = {};
-                let hasUpdates = false;
-                
-                // 處理 userVacationTimes - 根據 updatedVacationTimes 來決定更新或刪除
-                const vacationTimesUpdate = {};
-                
-                // 處理 normalizedKey
-                if (updatedVacationTimes.hasOwnProperty(normalizedKey)) {
-                    // 存在且不為空，需要更新
-                    vacationTimesUpdate[normalizedKey] = updatedVacationTimes[normalizedKey];
-                    hasUpdates = true;
-                } else if (currentVacationTimes.hasOwnProperty(normalizedKey)) {
-                    // 原本存在但現在不存在了（被刪除），需要刪除
-                    vacationTimesUpdate[normalizedKey] = deleteField();
-                    hasUpdates = true;
+                    updatedVacationTimes[legacyKey] = updatedLegacyData;
                 }
                 
-                // 處理 legacyKey 的 userVacationTimes（如果存在且與 normalizedKey 不同）
-                if (legacyKey !== normalizedKey) {
-                    if (updatedVacationTimes.hasOwnProperty(legacyKey)) {
-                        vacationTimesUpdate[legacyKey] = updatedVacationTimes[legacyKey];
-                        hasUpdates = true;
-                    } else if (currentVacationTimes.hasOwnProperty(legacyKey)) {
-                        vacationTimesUpdate[legacyKey] = deleteField();
-                        hasUpdates = true;
-                    }
-                }
+                await setDoc(doc(this.db, "scheduleData", "main"), { 
+                    userVacationTimes: updatedVacationTimes
+                }, { merge: true });
                 
-                if (Object.keys(vacationTimesUpdate).length > 0) {
-                    updateData.userVacationTimes = vacationTimesUpdate;
-                }
-                
-                // 處理 userAvailability - 根據 updatedUserAvailability 來決定更新或刪除
-                const userAvailabilityUpdate = {};
-                
-                // 處理 availabilityKey
-                if (updatedUserAvailability.hasOwnProperty(availabilityKey)) {
-                    // 存在且不為空，需要更新
-                    userAvailabilityUpdate[availabilityKey] = updatedUserAvailability[availabilityKey];
-                    hasUpdates = true;
-                } else if (currentUserAvailability.hasOwnProperty(availabilityKey)) {
-                    // 原本存在但現在不存在了（被刪除），需要刪除
-                    userAvailabilityUpdate[availabilityKey] = deleteField();
-                    hasUpdates = true;
-                }
-                
-                // 處理 legacyKey 的 userAvailability（如果存在且與 normalizedKey 不同）
-                if (legacyAvailabilityKey !== availabilityKey) {
-                    if (updatedUserAvailability.hasOwnProperty(legacyAvailabilityKey)) {
-                        userAvailabilityUpdate[legacyAvailabilityKey] = updatedUserAvailability[legacyAvailabilityKey];
-                        hasUpdates = true;
-                    } else if (currentUserAvailability.hasOwnProperty(legacyAvailabilityKey)) {
-                        userAvailabilityUpdate[legacyAvailabilityKey] = deleteField();
-                        hasUpdates = true;
-                    }
-                }
-                
-                if (Object.keys(userAvailabilityUpdate).length > 0) {
-                    updateData.userAvailability = userAvailabilityUpdate;
-                }
-                
-                // 執行更新（如果有任何變更）
-                if (hasUpdates && Object.keys(updateData).length > 0) {
-                    await updateDoc(scheduleDataRef, updateData);
-                }
-                
-                // 更新本地數據（清理空物件和空陣列）
-                const cleanedVacationTimes = {};
-                Object.keys(updatedVacationTimes).forEach(key => {
-                    if (Object.keys(updatedVacationTimes[key] || {}).length > 0) {
-                        cleanedVacationTimes[key] = updatedVacationTimes[key];
-                    }
-                });
-                
-                const cleanedUserAvailability = {};
-                Object.keys(updatedUserAvailability).forEach(key => {
-                    if (Array.isArray(updatedUserAvailability[key]) && updatedUserAvailability[key].length > 0) {
-                        cleanedUserAvailability[key] = updatedUserAvailability[key];
-                    }
-                });
-                
-                this.allData.userVacationTimes = cleanedVacationTimes;
-                this.allData.userAvailability = cleanedUserAvailability;
+                // 立即更新本地數據，確保月曆能立即反映變更
+                this.allData.userVacationTimes = updatedVacationTimes;
             }
 
             async updateAdminHolidays(holidays) {
