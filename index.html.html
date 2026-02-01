@@ -188,11 +188,8 @@
             </header>
 
             <main>
-                <div id="standard-view">
-                    </div>
-
                 <div id="calendar-view" class="hidden">
-                    </div>
+                </div>
             </main>
         </div>
 
@@ -372,18 +369,6 @@
                 };
                 clearTimeout(timeout);
                 timeout = setTimeout(later, wait);
-            };
-        }
-
-        // 節流函數 - 確保一定時間內只執行一次
-        function throttle(func, limit) {
-            let inThrottle;
-            return function(...args) {
-                if (!inThrottle) {
-                    func.apply(this, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }
             };
         }
 
@@ -880,7 +865,6 @@
 
             setupRealtimeListeners() {
                 const dataDocRef = doc(this.db, "scheduleData", "main");
-                const usersColRef = collection(this.db, "users");
 
                 const unsubData = onSnapshot(dataDocRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -1346,6 +1330,7 @@
                 this.pendingDeleteUser = null;
                 this.pendingVacationDate = null;
                 this.currentCalendarView = 'outside'; // 初始化月曆視圖類型，默認顯示外場月曆
+                this._dayClickInProgress = false; // 防止快速重複點擊的標記
                 
                 // === 優化 1.4: 月曆快取系統 (Diff Rendering) ===
                 this.calendarCache = {
@@ -1826,11 +1811,8 @@
                 }
             }
 
-            // === 優化 4.3: 防止快速重複點擊 ===
-            _dayClickInProgress = false;
-            
             async handleDayClick(e) {
-                // 防止快速重複點擊
+                // === 優化 4.3: 防止快速重複點擊 ===
                 if (this._dayClickInProgress) return;
                 this._dayClickInProgress = true;
                 setTimeout(() => { this._dayClickInProgress = false; }, 300);
@@ -3842,7 +3824,7 @@
                 perfMonitor.end('renderOutsideCalendar');
             }
             
-            // 事件監聯器 (優化版)
+            // 事件監聽器 (優化版)
             setupEventListeners() {
                 this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
                     e.preventDefault(); this.uiManager.showRegisterForm(); 
