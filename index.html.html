@@ -4,21 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>韓泰泰排班系統</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- === 優化 3.2: 預載入關鍵資源 === -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- === 優化 3.2: 字體加載優化 (font-display: swap) === -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"></noscript>
     <style>
-        /* 自定義樣式 */
+        /* === 優化 3.1: 關鍵 CSS 內聯 === */
+        /* 首屏渲染所需的關鍵樣式，減少 FOUC (Flash of Unstyled Content) */
+        
+        /* 基礎樣式 */
         body {
-            font-family: 'Noto Sans TC', sans-serif;
+            font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background-color: #f0f4f8;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+        
+        /* 載入動畫 */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Material Icons */
         .material-icons-outlined {
             font-size: 1.25rem;
+            font-display: swap;
         }
-        /* 滾動條美化 */
+        
+        /* 滾動條美化 - 使用 GPU 加速 */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -32,19 +60,22 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
         /* 避免 Tailwind CSS JIT 編譯器移除動態 class */
         .bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-indigo-100, .bg-pink-100, .bg-purple-100, .bg-gray-100, .bg-orange-100 {}
-        .text-blue-800, .text-green-800, .text-yellow-800, .text-indigo-800, .text-pink-800, .text-purple-800, .text-gray-800, .text-amber-800, .text-orange-800 {} /* Added text-orange-800 */
-        .border-blue-400, .border-green-400, .border-yellow-400, .border-indigo-400, .border-pink-400, .border-purple-400, .border-gray-400 {}
+        .text-blue-800, .text-green-800, .text-yellow-800, .text-indigo-800, .text-pink-800, .text-purple-800, .text-gray-800, .text-amber-800, .text-orange-800 {}
+        .border-blue-400, .border-green-400, .border-yellow-400, .border-indigo-400, .border-pink-400, .border-purple-400, .border-gray-400, .border-orange-400 {}
         .hidden { display: none; }
         
-        /* 月曆樣式 */
+        /* 月曆樣式 - 優化動畫性能 */
         .calendar-day {
-            transition: all 0.2s ease-in-out;
-            min-height: 6rem; /* 調整手機上的最小高度 */
+            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+            min-height: 6rem;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            will-change: transform; /* GPU 加速提示 */
+            contain: layout style; /* CSS Containment 優化 */
         }
         @media (min-width: 640px) {
             .calendar-day {
@@ -60,22 +91,44 @@
         }
         .custom-calendar-grid {
             display: grid;
-            /* 日     一     二     三     四     五     六 */
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
+            contain: layout; /* CSS Containment 優化 */
         }
         
-        /* Modal Style */
+        /* Modal Style - 優化過渡動畫 */
         #cover-shift-modal.hidden,
-        #shift-select-modal.hidden {
+        #shift-select-modal.hidden,
+        #vacation-time-modal.hidden,
+        #delete-user-modal.hidden,
+        #settings-modal.hidden {
             display: none;
+            opacity: 0;
         }
         #cover-shift-modal:not(.hidden),
-        #shift-select-modal:not(.hidden) {
+        #shift-select-modal:not(.hidden),
+        #vacation-time-modal:not(.hidden),
+        #delete-user-modal:not(.hidden),
+        #settings-modal:not(.hidden) {
             display: flex;
+            opacity: 1;
+        }
+        
+        /* 減少重繪的優化 */
+        .calendar-day span,
+        .calendar-day p {
+            contain: content;
         }
     </style>
 </head>
 <body class="antialiased text-gray-800">
+
+    <!-- === 優化 3.6: 載入動畫 === -->
+    <div id="loading-screen" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[100]">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
+            <p class="mt-4 text-gray-600 font-medium">載入中...</p>
+        </div>
+    </div>
 
     <div id="auth-container" class="min-h-screen flex items-center justify-center bg-gray-100">
         <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg">
@@ -301,125 +354,15 @@
             query,
             where,
             writeBatch,
-            getDocs
+            getDocs,
+            enableIndexedDbPersistence
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // ===================================================================================
-        // === 常量定義 (Constants) ===
+        // === 工具函數 (Utility Functions) ===
         // ===================================================================================
-        const ROLES = {
-            ADMIN: "管理者",
-            INSIDE_PREP: "内場備菜班",
-            INSIDE_FRY: "内場炸爐班",
-            INSIDE_PARTTIMER: "内場工讀生",
-            OUTSIDE_WORKER: "外場工讀生",
-            OUTSIDE_COUNTER: "外場櫃檯"
-        };
-
-        const ROLE_GROUPS = {
-            FULLTIME: [ROLES.INSIDE_PREP, ROLES.INSIDE_FRY],
-            INSIDE: [ROLES.INSIDE_PARTTIMER, ROLES.INSIDE_PREP, ROLES.INSIDE_FRY],
-            OUTSIDE: [ROLES.OUTSIDE_WORKER, ROLES.OUTSIDE_COUNTER]
-        };
-
-        const SHIFTS = {
-            INSIDE: [
-                "備菜班 (早)", "備菜班 (晚)", "備菜班 (全日)",
-                "炸爐班 (早)", "炸爐班 (晚)", "炸爐班 (全日)",
-                "收班", "收班（內場）"
-            ],
-            OUTSIDE: [
-                "早櫃", "早班", "晚櫃", "洗碗", "收班", 
-                "收班（外場）", "櫃檯"
-            ],
-            MORNING_GROUP: ["早櫃", "早班"],
-            EVENING_GROUP: ["晚櫃", "晚班", "洗碗", "收班"]
-        };
-
-        const SHIFT_TIMES = {
-            "早櫃": "10:30 - 14:00",
-            "晚櫃": "16:40 - 21:00",
-            "早班": "11:30 - 14:00",
-            "洗碗": "17:30 - 20:00",
-            "收班": "18:00 - 22:00"
-        };
-
-        // ===================================================================================
-        // === 日期工具函數 (DateUtils) ===
-        // ===================================================================================
-        const DateUtils = {
-            formatDate(year, month, day) {
-                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            },
-            
-            parseDate(dateString) {
-                const [year, month, day] = dateString.split('-').map(Number);
-                return { year, month, day };
-            },
-            
-            getVacationKey(userId, year, month) {
-                return `${userId}-${year}-${parseInt(month, 10)}`;
-            },
-            
-            getLegacyVacationKey(userId, year, month) {
-                const numericMonth = parseInt(month, 10);
-                return `${userId}-${year}-${String(numericMonth).padStart(2, '0')}`;
-            },
-            
-            isWeekend(date) {
-                const day = date.getDay();
-                return day === 0 || day === 6;
-            },
-            
-            isWeekday(date) {
-                const day = date.getDay();
-                return day >= 1 && day <= 5;
-            },
-            
-            isThursday(date) {
-                return date.getDay() === 4;
-            },
-            
-            getLastDayOfMonth(year, month) {
-                return new Date(year, month, 0).getDate();
-            },
-            
-            getTodayString() {
-                return new Date().toISOString().split('T')[0];
-            }
-        };
-
-        // ===================================================================================
-        // === 錯誤處理工具 (ErrorHandler) ===
-        // ===================================================================================
-        const ErrorHandler = {
-            handle(error, context = '', uiManager = null) {
-                console.error(`[${context}]`, error);
-                const userMessage = this.getUserFriendlyMessage(error);
-                if (uiManager) {
-                    uiManager.showToast(userMessage);
-                }
-                return userMessage;
-            },
-            
-            getUserFriendlyMessage(error) {
-                const messages = {
-                    'auth/wrong-password': '密碼錯誤',
-                    'auth/user-not-found': '找不到此用戶',
-                    'auth/email-already-in-use': '此用戶名稱已被使用',
-                    'auth/weak-password': '密碼強度不足',
-                    'auth/requires-recent-login': '請先登出再重新登入後再試',
-                    'permission-denied': '權限不足',
-                    'unavailable': '服務暫時無法使用，請稍後再試',
-                    'network-request-failed': '網路連線問題，請檢查網路'
-                };
-                return messages[error.code] || error.message || '發生未知錯誤，請稍後再試';
-            }
-        };
-
-        // ===================================================================================
-        // === 防抖工具函數 (Debounce) ===
-        // ===================================================================================
+        
+        // 防抖函數 - 用於減少高頻操作
         function debounce(func, wait) {
             let timeout;
             return function executedFunction(...args) {
@@ -431,6 +374,180 @@
                 timeout = setTimeout(later, wait);
             };
         }
+
+        // 節流函數 - 確保一定時間內只執行一次
+        function throttle(func, limit) {
+            let inThrottle;
+            return function(...args) {
+                if (!inThrottle) {
+                    func.apply(this, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+
+        // 高效深拷貝 (使用 structuredClone 或回退方案)
+        function deepClone(obj) {
+            if (typeof structuredClone === 'function') {
+                return structuredClone(obj);
+            }
+            return JSON.parse(JSON.stringify(obj));
+        }
+
+        // 日期格式化快取
+        const dateFormatCache = new Map();
+        function formatDateString(year, month, day) {
+            const key = `${year}-${month}-${day}`;
+            if (!dateFormatCache.has(key)) {
+                dateFormatCache.set(key, `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+            }
+            return dateFormatCache.get(key);
+        }
+
+        // ===================================================================================
+        // === 優化 2.3: 本地快取管理器 (LocalCacheManager) ===
+        // ===================================================================================
+        class LocalCacheManager {
+            constructor(prefix = 'schedule_app_') {
+                this.prefix = prefix;
+                this.memoryCache = new Map(); // 記憶體快取層
+            }
+
+            // 生成完整的快取鍵
+            _getKey(key) {
+                return `${this.prefix}${key}`;
+            }
+
+            // 設置快取 (帶過期時間)
+            set(key, data, ttlMinutes = 60) {
+                const cacheData = {
+                    data: data,
+                    timestamp: Date.now(),
+                    expiry: Date.now() + (ttlMinutes * 60 * 1000)
+                };
+                
+                // 同時存入記憶體和 localStorage
+                this.memoryCache.set(key, cacheData);
+                
+                try {
+                    localStorage.setItem(this._getKey(key), JSON.stringify(cacheData));
+                } catch (e) {
+                    // localStorage 可能已滿或被禁用
+                    console.warn('LocalStorage 寫入失敗:', e.message);
+                    this._cleanupOldCache();
+                }
+            }
+
+            // 讀取快取
+            get(key) {
+                // 優先從記憶體快取讀取
+                if (this.memoryCache.has(key)) {
+                    const memData = this.memoryCache.get(key);
+                    if (memData.expiry > Date.now()) {
+                        return memData.data;
+                    }
+                    this.memoryCache.delete(key);
+                }
+
+                // 從 localStorage 讀取
+                try {
+                    const cached = localStorage.getItem(this._getKey(key));
+                    if (cached) {
+                        const cacheData = JSON.parse(cached);
+                        if (cacheData.expiry > Date.now()) {
+                            // 回填記憶體快取
+                            this.memoryCache.set(key, cacheData);
+                            return cacheData.data;
+                        }
+                        // 過期了，刪除
+                        this.remove(key);
+                    }
+                } catch (e) {
+                    console.warn('LocalStorage 讀取失敗:', e.message);
+                }
+                
+                return null;
+            }
+
+            // 檢查快取是否存在且有效
+            has(key) {
+                return this.get(key) !== null;
+            }
+
+            // 移除快取
+            remove(key) {
+                this.memoryCache.delete(key);
+                try {
+                    localStorage.removeItem(this._getKey(key));
+                } catch (e) {
+                    // 忽略錯誤
+                }
+            }
+
+            // 清理過期的快取
+            _cleanupOldCache() {
+                try {
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith(this.prefix)) {
+                            try {
+                                const data = JSON.parse(localStorage.getItem(key));
+                                if (data.expiry && data.expiry < Date.now()) {
+                                    keysToRemove.push(key);
+                                }
+                            } catch (e) {
+                                keysToRemove.push(key);
+                            }
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    console.log(`🧹 已清理 ${keysToRemove.length} 個過期快取`);
+                } catch (e) {
+                    console.warn('清理快取失敗:', e.message);
+                }
+            }
+
+            // 清除所有應用程式快取
+            clearAll() {
+                this.memoryCache.clear();
+                try {
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && key.startsWith(this.prefix)) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                } catch (e) {
+                    console.warn('清除快取失敗:', e.message);
+                }
+            }
+        }
+
+        // 建立全域快取實例
+        const localCache = new LocalCacheManager();
+
+        // === 效能監控工具 (開發時使用) ===
+        const perfMonitor = {
+            marks: {},
+            start(name) {
+                this.marks[name] = performance.now();
+            },
+            end(name) {
+                if (this.marks[name]) {
+                    const duration = performance.now() - this.marks[name];
+                    if (duration > 50) { // 只記錄超過 50ms 的操作
+                        console.log(`⏱️ ${name}: ${duration.toFixed(2)}ms`);
+                    }
+                    delete this.marks[name];
+                    return duration;
+                }
+                return 0;
+            }
+        };
 
         // ===================================================================================
         // === 認證管理類別 (AuthManager) ===
@@ -469,8 +586,8 @@
                         role: role
                     });
                 } catch (error) {
-                    const message = ErrorHandler.handle(error, 'Register');
-                    throw new Error(message);
+                    console.error("Register error:", error);
+                    throw new Error("註冊失敗，請稍後再試。");
                 }
             }
 
@@ -478,7 +595,7 @@
                 try {
                     await signInWithEmailAndPassword(this.auth, `${username.trim().toLowerCase()}@schedule-app.com`, password);
                 } catch (error) {
-                    ErrorHandler.handle(error, 'Login');
+                    console.error("Login error:", error);
                     throw new Error("用戶名稱或密碼錯誤。");
                 }
             }
@@ -498,8 +615,8 @@
                 try {
                     await updatePassword(this.currentUser, newPassword);
                 } catch (error) {
-                    const message = ErrorHandler.handle(error, 'ChangePassword');
-                    throw new Error(message || '密碼更新失敗，請先登出再重新登入後再試。');
+                    console.error("Password change error:", error);
+                    throw new Error('密碼更新失敗。這可能是因為您登入時間過久，請先登出再重新登入一次後再試。');
                 }
             }
 
@@ -532,8 +649,8 @@
                         username_lowercase: newUsername.toLowerCase()
                     }, { merge: true });
                 } catch (error) {
-                    const message = ErrorHandler.handle(error, 'ChangeUsername');
-                    throw new Error(message || '名稱更新失敗，請稍後再試。');
+                    console.error("Username change error:", error);
+                    throw new Error('名稱更新失敗，請稍後再試。');
                 }
             }
 
@@ -576,8 +693,19 @@
             }
 
             async fetchHolidays(year) {
+                // 1. 先檢查記憶體快取
                 if (this.holidaysCache[year]) {
                     return this.holidaysCache[year];
+                }
+
+                // === 優化 2.3: 檢查本地快取 ===
+                const cacheKey = `holidays_${year}`;
+                const cachedData = localCache.get(cacheKey);
+                if (cachedData) {
+                    console.log(`📅 從本地快取載入 ${year} 年假日資料`);
+                    const holidaysMap = new Map(cachedData);
+                    this.holidaysCache[year] = holidaysMap;
+                    return holidaysMap;
                 }
 
                 // 台灣國定假日備用資料
@@ -602,62 +730,82 @@
                     ])
                 };
 
-                // 嘗試多個API來源
+                // === 優化 2.2: 並行請求多個 API 來源 ===
                 const apiUrls = [
                     `https://cdn.jsdelivr.net/gh/g0v/tw-holiday@master/data/${year}.json`,
-                    `https://raw.githubusercontent.com/g0v/tw-holiday/master/data/${year}.json`,
-                    `https://holidays.moes.tw/api/holidays/${year}`
+                    `https://raw.githubusercontent.com/g0v/tw-holiday/master/data/${year}.json`
                 ];
 
-                for (const url of apiUrls) {
-                    try {
-                        console.log(`嘗試從 ${url} 獲取 ${year} 年假日資料...`);
-                        const response = await fetch(url, {
-                            method: 'GET',
-                            headers: {
-                                'Accept': 'application/json',
-                            },
-                            timeout: 5000 // 5秒超時
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            const holidaysMap = new Map();
-                            
-                            // 處理不同API格式
-                            if (data.holidays && Array.isArray(data.holidays)) {
-                                data.holidays.forEach(holiday => {
-                                    if (holiday.isHoliday) { 
-                                       holidaysMap.set(holiday.date, holiday.name);
-                                    }
-                                });
-                            } else if (Array.isArray(data)) {
-                                data.forEach(holiday => {
-                                    if (holiday.isHoliday) { 
-                                       holidaysMap.set(holiday.date, holiday.name);
-                                    }
-                                });
-                            }
-                            
-                            if (holidaysMap.size > 0) {
-                                console.log(`成功從 ${url} 獲取 ${year} 年假日資料，共 ${holidaysMap.size} 個假日`);
-                                this.holidaysCache[year] = holidaysMap;
-                                return holidaysMap;
-                            }
+                // 創建帶超時的 fetch 請求
+                const fetchWithTimeout = (url, timeout = 5000) => {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    
+                    return fetch(url, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        signal: controller.signal
+                    }).then(response => {
+                        clearTimeout(timeoutId);
+                        return response;
+                    }).catch(err => {
+                        clearTimeout(timeoutId);
+                        throw err;
+                    });
+                };
+
+                // 處理 API 回應
+                const processResponse = async (response) => {
+                    if (!response.ok) throw new Error('Response not ok');
+                    const data = await response.json();
+                    const holidaysMap = new Map();
+                    
+                    // 處理不同API格式
+                    const holidaysArray = data.holidays || (Array.isArray(data) ? data : []);
+                    holidaysArray.forEach(holiday => {
+                        if (holiday.isHoliday) { 
+                           holidaysMap.set(holiday.date, holiday.name);
                         }
-                    } catch (error) {
-                        console.warn(`從 ${url} 獲取假日資料失敗:`, error.message);
-                        continue;
-                    }
+                    });
+                    
+                    if (holidaysMap.size === 0) throw new Error('No holidays found');
+                    return holidaysMap;
+                };
+
+                try {
+                    console.log(`🌐 並行請求 ${year} 年假日資料...`);
+                    
+                    // === 優化 2.2: 使用 Promise.any 並行請求，取最快成功的 ===
+                    const fetchPromises = apiUrls.map(url => 
+                        fetchWithTimeout(url, 5000).then(processResponse)
+                    );
+                    
+                    // Promise.any - 只要有一個成功就返回
+                    const holidaysMap = await Promise.any(fetchPromises);
+                    
+                    console.log(`✅ 成功獲取 ${year} 年假日資料，共 ${holidaysMap.size} 個假日`);
+                    
+                    // 存入記憶體快取
+                    this.holidaysCache[year] = holidaysMap;
+                    
+                    // === 優化 2.3: 存入本地快取 (7天過期) ===
+                    localCache.set(cacheKey, Array.from(holidaysMap.entries()), 60 * 24 * 7);
+                    
+                    return holidaysMap;
+                    
+                } catch (error) {
+                    console.warn(`⚠️ 所有 API 請求失敗:`, error.message);
                 }
 
                 // 如果所有API都失敗，使用備用資料
                 if (fallbackHolidays[year]) {
-                    console.warn(`無法從網路獲取 ${year} 年的假日資訊，使用內建的備用資料。`);
+                    console.warn(`📋 使用 ${year} 年的內建備用資料`);
                     this.holidaysCache[year] = fallbackHolidays[year];
+                    // 備用資料也存入快取 (1天過期，以便明天重試)
+                    localCache.set(cacheKey, Array.from(fallbackHolidays[year].entries()), 60 * 24);
                     return this.holidaysCache[year];
                 } else {
-                    console.warn(`沒有 ${year} 年的備用假日資料，返回空資料。`);
+                    console.warn(`❌ 沒有 ${year} 年的備用假日資料，返回空資料`);
                     this.holidaysCache[year] = new Map();
                     return this.holidaysCache[year];
                 }
@@ -686,21 +834,6 @@
             nextMonth() {
                 this.calendarDate.setMonth(this.calendarDate.getMonth() + 1);
             }
-            
-            // 預載入假日資料 (非阻塞)
-            async preloadHolidays() {
-                const currentYear = new Date().getFullYear();
-                try {
-                    // 預載入當年和隔年的假日資料
-                    await Promise.all([
-                        this.fetchHolidays(currentYear),
-                        this.fetchHolidays(currentYear + 1)
-                    ]);
-                    console.log('假日資料預載入完成');
-                } catch (error) {
-                    console.warn('假日預載入部分失敗:', error);
-                }
-            }
         }
 
         // ===================================================================================
@@ -713,34 +846,36 @@
                 this.allUsers = [];
                 this.unsubscribeListeners = [];
                 this.onDataChangeCallback = null;
-                this._usersByRoleCache = {};  // 使用者角色快取
+                
+                // === 優化 2.5: 從本地快取預先載入資料 ===
+                this._loadFromLocalCache();
+            }
+            
+            // 從本地快取載入資料（用於首次渲染前的快速顯示）
+            _loadFromLocalCache() {
+                const cachedData = localCache.get('scheduleData');
+                const cachedUsers = localCache.get('usersList');
+                
+                if (cachedData) {
+                    this.allData = cachedData;
+                    console.log('📦 從本地快取載入排班資料');
+                }
+                if (cachedUsers) {
+                    this.allUsers = cachedUsers;
+                    console.log('👥 從本地快取載入用戶列表');
+                }
+            }
+            
+            // 儲存資料到本地快取
+            _saveToLocalCache() {
+                // 排班資料快取 30 分鐘
+                localCache.set('scheduleData', this.allData, 30);
+                // 用戶列表快取 60 分鐘
+                localCache.set('usersList', this.allUsers, 60);
             }
 
             setOnDataChangeCallback(callback) {
-                // 使用防抖機制，300ms 內的多次呼叫只執行最後一次
-                this.onDataChangeCallback = debounce(callback, 300);
-            }
-            
-            // 快取過濾：根據角色獲取使用者
-            getUsersByRole(role) {
-                if (!this._usersByRoleCache[role]) {
-                    this._usersByRoleCache[role] = this.allUsers.filter(u => u.role === role);
-                }
-                return this._usersByRoleCache[role];
-            }
-            
-            // 快取過濾：根據角色群組獲取使用者
-            getUsersByRoleGroup(roleGroup) {
-                const cacheKey = `group_${roleGroup.join('_')}`;
-                if (!this._usersByRoleCache[cacheKey]) {
-                    this._usersByRoleCache[cacheKey] = this.allUsers.filter(u => roleGroup.includes(u.role));
-                }
-                return this._usersByRoleCache[cacheKey];
-            }
-            
-            // 清除快取
-            clearUserCache() {
-                this._usersByRoleCache = {};
+                this.onDataChangeCallback = callback;
             }
 
             setupRealtimeListeners() {
@@ -750,6 +885,8 @@
                 const unsubData = onSnapshot(dataDocRef, (docSnap) => {
                     if (docSnap.exists()) {
                         this.allData = docSnap.data();
+                        // === 優化 2.5: 更新本地快取 ===
+                        this._saveToLocalCache();
                     } else {
                         // Initialize data if it doesn't exist
                         setDoc(doc(this.db, "scheduleData", "main"), {
@@ -770,8 +907,8 @@
                 const unsubUsers = onSnapshot(query(collection(this.db, "users")), (snapshot) => {
                     this.allUsers = [];
                     snapshot.forEach(doc => this.allUsers.push({ id: doc.id, ...doc.data() }));
-                    // 清除使用者快取
-                    this.clearUserCache();
+                    // === 優化 2.5: 更新本地快取 ===
+                    this._saveToLocalCache();
                     // 觸發重新渲染
                     if (this.onDataChangeCallback) {
                         this.onDataChangeCallback();
@@ -883,11 +1020,15 @@
             }
 
             async updateMultiple(fields) {
+                // === 優化 2.4: 使用 writeBatch 批量寫入 ===
                 // 使用 merge:true 同步更新多個欄位，避免資料彼此覆蓋
-                console.log('updateMultiple 被呼叫，準備更新欄位:', fields);
+                console.log('updateMultiple 被呼叫，準備更新欄位:', Object.keys(fields));
                 try {
-                    await setDoc(doc(this.db, "scheduleData", "main"), fields, { merge: true });
-                    console.log('updateMultiple 更新成功');
+                    const batch = writeBatch(this.db);
+                    const docRef = doc(this.db, "scheduleData", "main");
+                    batch.set(docRef, fields, { merge: true });
+                    await batch.commit();
+                    console.log('updateMultiple 批量更新成功');
                 } catch (error) {
                     console.error('updateMultiple 更新失敗:', error);
                     throw error;
@@ -895,16 +1036,18 @@
             }
 
             async deleteUser(userId) {
+                // === 優化 2.4: 使用 writeBatch 批量寫入 ===
                 try {
                     console.log('開始刪除用戶:', userId);
                     
+                    const batch = writeBatch(this.db);
+                    
                     // 1. 刪除用戶文檔
-                    await deleteDoc(doc(this.db, "users", userId));
-                    console.log('用戶文檔已刪除');
+                    batch.delete(doc(this.db, "users", userId));
                     
                     // 2. 清理所有相關數據
                     const currentData = this.allData;
-                    const updatedData = { ...currentData };
+                    const updatedData = deepClone(currentData); // 使用優化的深拷貝
                     
                     // 清理 userVacations
                     const userVacationKeys = Object.keys(updatedData.userVacations || {}).filter(key => key.startsWith(`${userId}-`));
@@ -945,9 +1088,12 @@
                     });
                     updatedData.outsideSchedule = updatedOutsideSchedule;
                     
-                    // 3. 更新數據庫
-                    await setDoc(doc(this.db, "scheduleData", "main"), updatedData);
-                    console.log('用戶相關數據已清理完成');
+                    // 3. 批量更新數據庫
+                    batch.set(doc(this.db, "scheduleData", "main"), updatedData);
+                    
+                    // 4. 執行批量操作 (原子性：全部成功或全部失敗)
+                    await batch.commit();
+                    console.log('✅ 用戶及相關數據已批量刪除完成');
                     
                 } catch (error) {
                     console.error('刪除用戶失敗:', error);
@@ -962,36 +1108,6 @@
         class UIManager {
             constructor() {
                 this.initializeElements();
-                this.modals = {};  // Modal 管理
-            }
-            
-            // Modal 統一管理方法
-            registerModal(name, element, options = {}) {
-                this.modals[name] = { element, ...options };
-            }
-            
-            showModal(name, data = {}) {
-                const modal = this.modals[name];
-                if (!modal) return;
-                if (modal.onShow) modal.onShow(data);
-                modal.element.classList.remove('hidden');
-            }
-            
-            hideModal(name) {
-                const modal = this.modals[name];
-                if (!modal) return;
-                if (modal.onHide) modal.onHide();
-                modal.element.classList.add('hidden');
-            }
-            
-            hideAllModals() {
-                Object.keys(this.modals).forEach(name => this.hideModal(name));
-            }
-            
-            isAnyModalOpen() {
-                return Object.values(this.modals).some(modal => 
-                    !modal.element.classList.contains('hidden')
-                );
             }
 
             initializeElements() {
@@ -1231,12 +1347,47 @@
                 this.pendingVacationDate = null;
                 this.currentCalendarView = 'outside'; // 初始化月曆視圖類型，默認顯示外場月曆
                 
-                // 使用全域常量定義的班次選項
-                this.insideShifts = SHIFTS.INSIDE;
-                this.outsideShifts = SHIFTS.OUTSIDE;
+                // === 優化 1.4: 月曆快取系統 (Diff Rendering) ===
+                this.calendarCache = {
+                    inside: new Map(), // 內場月曆快取: dateString -> cellHTML
+                    outside: new Map(), // 外場月曆快取: dateString -> cellHTML
+                    lastRenderedMonth: null, // 上次渲染的月份
+                    lastRenderedYear: null, // 上次渲染的年份
+                    dataHash: null // 資料雜湊值，用於檢測變更
+                };
                 
-                // 預載入假日資料 (非阻塞)
-                this.calendarManager.preloadHolidays();
+                // === (NEW) Define shift options ===
+                this.insideShifts = [
+                    "備菜班 (早)", "備菜班 (晚)", "備菜班 (全日)",
+                    "炸爐班 (早)", "炸爐班 (晚)", "炸爐班 (全日)",
+                    "收班", // 内場工讀生（向後兼容）
+                    "收班（內場）" // 内場工讀生
+                ];
+                this.outsideShifts = [
+                    "早櫃", "早班", "晚櫃", "洗碗", "收班", // 外場工讀生（向後兼容）
+                    "收班（外場）", // 外場工讀生
+                    "櫃檯" // 外場櫃檯
+                ];
+            }
+            
+            // === 優化 1.4: 計算資料雜湊值，快速檢測變更 ===
+            calculateDataHash(data) {
+                // 簡單的雜湊計算，用於快速比較資料是否變更
+                const str = JSON.stringify(data);
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash; // Convert to 32bit integer
+                }
+                return hash;
+            }
+            
+            // === 優化 1.4: 清除月曆快取 ===
+            clearCalendarCache() {
+                this.calendarCache.inside.clear();
+                this.calendarCache.outside.clear();
+                this.calendarCache.dataHash = null;
             }
 
             initializeFirebase() {
@@ -1258,6 +1409,22 @@
                 const app = initializeApp(firebaseConfig);
                 this.auth = getAuth(app);
                 this.db = getFirestore(app);
+                
+                // === 啟用 Firestore 離線持久化 (優化 2.6) ===
+                // 這讓資料在本地 IndexedDB 快取，大幅減少網路請求
+                enableIndexedDbPersistence(this.db)
+                    .then(() => {
+                        console.log('✅ Firestore 離線持久化已啟用');
+                    })
+                    .catch((err) => {
+                        if (err.code === 'failed-precondition') {
+                            // 多個分頁同時開啟時會發生
+                            console.warn('⚠️ 離線持久化失敗：多個分頁同時開啟');
+                        } else if (err.code === 'unimplemented') {
+                            // 瀏覽器不支援
+                            console.warn('⚠️ 此瀏覽器不支援離線持久化');
+                        }
+                    });
             }
 
             initializeManagers() {
@@ -1265,51 +1432,14 @@
                 this.calendarManager = new CalendarManager();
                 this.scheduleManager = new ScheduleManager(this.db);
                 this.uiManager = new UIManager();
-                
-                // 註冊所有 Modals 到統一管理
-                this.registerModals();
-            }
-            
-            registerModals() {
-                // 設定 Modal
-                this.uiManager.registerModal('settings', this.uiManager.settingsModal, {
-                    onShow: () => {
-                        this.uiManager.passwordSettingsError.textContent = '';
-                        this.uiManager.usernameSettingsError.textContent = '';
-                    },
-                    onHide: () => {
-                        this.uiManager.changePasswordForm.reset();
-                    }
-                });
-                
-                // 班次選擇 Modal
-                this.uiManager.registerModal('shiftSelect', this.uiManager.shiftSelectModal, {
-                    onHide: () => {
-                        this.uiManager.shiftSelectOptions.innerHTML = '';
-                    }
-                });
-                
-                // 代班人選擇 Modal
-                this.uiManager.registerModal('coverShift', this.uiManager.coverShiftModal, {
-                    onHide: () => {
-                        this.uiManager.coverShiftForm.reset();
-                    }
-                });
-                
-                // 休假時間選擇 Modal
-                this.uiManager.registerModal('vacationTime', this.uiManager.vacationTimeModal);
-                
-                // 刪除用戶 Modal
-                this.uiManager.registerModal('deleteUser', this.uiManager.deleteUserModal);
             }
 
             initializeConstants() {
-                // 使用全域常量
-                this.ADMIN_ROLE = ROLES.ADMIN;
-                this.FULLTIME_ROLES = ROLE_GROUPS.FULLTIME;
-                this.PART_TIMER_ROLE = ROLES.INSIDE_PARTTIMER;
-                this.OUTSIDE_ROLES = ROLE_GROUPS.OUTSIDE;
-                this.INSIDE_ROLES = ROLE_GROUPS.INSIDE;
+                this.ADMIN_ROLE = "管理者";
+                this.FULLTIME_ROLES = ["内場備菜班", "内場炸爐班"];
+                this.PART_TIMER_ROLE = "内場工讀生";
+                this.OUTSIDE_ROLES = ["外場工讀生", "外場櫃檯"];
+                this.INSIDE_ROLES = ["内場工讀生", "内場備菜班", "内場炸爐班"];
             }
 
             setupAutoSchedule() {
@@ -1427,8 +1557,8 @@
                                 const worker = sortedWorkers[workerIndex % sortedWorkers.length];
                                 
                                 let hasConflict = false;
-                                const morningGroup = SHIFTS.MORNING_GROUP;
-                                const eveningGroup = ["晚櫃", "洗碗", "收班"]; // 外場晚班組
+                                const morningGroup = ["早櫃", "早班"];
+                                const eveningGroup = ["晚櫃", "洗碗", "收班"];
 
                                 // Check for conflicts
                                 for (const existing of daySchedule) {
@@ -1502,7 +1632,7 @@
                                 // 檢查衝突：使用與櫃檯休假相同的分組規則
                                 let hasConflict = false;
                                 const morningGroup = ["早班"];  // 正常排班時，只有早班屬於早班組
-                                const eveningGroup = ["洗碗", "收班"];  // 洗碗、收班屬於外場晚班組
+                                const eveningGroup = ["洗碗", "收班"];  // 洗碗、收班屬於晚班組
                                 
                                 for (const existing of daySchedule) {
                                     if (existing.username === worker.username) {
@@ -1696,7 +1826,15 @@
                 }
             }
 
+            // === 優化 4.3: 防止快速重複點擊 ===
+            _dayClickInProgress = false;
+            
             async handleDayClick(e) {
+                // 防止快速重複點擊
+                if (this._dayClickInProgress) return;
+                this._dayClickInProgress = true;
+                setTimeout(() => { this._dayClickInProgress = false; }, 300);
+                
                 const dayDiv = e.target.closest('.calendar-day');
                 if (!dayDiv || !dayDiv.dataset.date) return;
                 
@@ -1891,8 +2029,8 @@
                 try {
                     // 這是關鍵的 Read-Modify-Write 邏輯
                     const allData = this.scheduleManager.getAllData();
-                    // 深度複製一份排班表，避免修改到當前狀態
-                    const newOutsideSchedule = JSON.parse(JSON.stringify(allData.outsideSchedule || {}));
+                    // === 優化 1.2: 使用優化的深拷貝 ===
+                    const newOutsideSchedule = deepClone(allData.outsideSchedule || {});
                     
                     const daySchedule = newOutsideSchedule[date];
                     if (!daySchedule) {
@@ -2163,11 +2301,13 @@
                     return true;
                 }
                 
-                // 使用全域常量
-                if (SHIFTS.MORNING_GROUP.includes(shift)) {
+                const morningShifts = ["早櫃", "早班"];
+                const eveningShifts = ["晚櫃", "晚班", "洗碗", "收班"];
+                
+                if (morningShifts.includes(shift)) {
                     // 早上班次，檢查是否早上休假
                     return !workerVacationData.morning;
-                } else if (SHIFTS.EVENING_GROUP.includes(shift)) {
+                } else if (eveningShifts.includes(shift)) {
                     // 晚上班次，檢查是否晚上休假
                     return !workerVacationData.evening;
                 }
@@ -2980,10 +3120,11 @@
                  await this.renderFullCalendar();
             }
 
-            // 外場人員視圖
+            // 外場人員視圖 (無變動)
             async renderOutsideView() {
+                // ... (code remains the same) ...
                 const currentUserData = this.authManager.getCurrentUserData();
-                const isWorker = currentUserData.role === ROLES.OUTSIDE_WORKER;
+                const isWorker = currentUserData.role === "外場工讀生";
                 
                  this.uiManager.calendarView.innerHTML = `
                     <div>
@@ -3028,17 +3169,18 @@
                 `;
                 
                 const instructions = this.uiManager.calendarView.querySelector('p');
-                if (currentUserData.role === ROLES.OUTSIDE_COUNTER) {
+                if (currentUserData.role === "外場櫃檯") {
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。";
                 } else {
-                    instructions.textContent = "請點擊日期標示您不能上班的日子 / 點擊已排班日期找人代班。";
+                    instructions.textContent = "請點擊日期標示您不能上班的日子 / 點擊已排班日期找人代班。"; // Updated instruction
                 }
                 
                 await this.renderOutsideCalendar();
             }
 
-            // 渲染內場完整月曆 (修改 - 修正 橙色警告 邏輯)
+            // 渲染內場完整月曆 (優化版)
             async renderFullCalendar() {
+                perfMonitor.start('renderFullCalendar');
                 this.calendarManager.getCalendarDate().setDate(1);
                 const month = this.calendarManager.getMonth();
                 const year = this.calendarManager.getYear();
@@ -3140,29 +3282,35 @@
                 });
                 // --- End Render Manual Assignments ---
 
-                // 使用 DocumentFragment 優化 DOM 操作
+
                 const calendarGrid = document.getElementById('calendar-grid');
+                
+                // === 優化 1.5: 使用 DocumentFragment 批量 DOM 操作 (內場月曆) ===
                 const fragment = document.createDocumentFragment();
                 
-                // 渲染前月日期
                 const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
                 const prevLastDay = new Date(year, month, 0).getDate();
+                
+                // 添加上個月的日期佔位
                 for (let i = firstDayIndex; i > 0; i--) {
-                    const prevDay = document.createElement('div');
-                    prevDay.className = 'p-1 sm:p-2 text-center text-gray-300 no-hover';
-                    prevDay.textContent = prevLastDay - i + 1;
-                    fragment.appendChild(prevDay);
+                    const emptyDay = document.createElement('div');
+                    emptyDay.className = 'p-1 sm:p-2 text-center text-gray-300 no-hover';
+                    emptyDay.textContent = prevLastDay - i + 1;
+                    fragment.appendChild(emptyDay);
                 }
 
-                const todayString = DateUtils.getTodayString();
+                const todayString = new Date().toISOString().split('T')[0];
                 const currentUserData = this.authManager.getCurrentUserData();
+                
+                // === 優化: 預先計算 adminHolidays Set 加速查找 ===
+                const adminHolidaysSet = new Set(adminHolidays);
 
                 for (let i = 1; i <= lastDayOfMonth; i++) {
-                    const dateString = DateUtils.formatDate(year, month + 1, i);
+                    const dateString = formatDateString(year, month + 1, i); // 使用快取的日期格式化
                     const day = document.createElement('div');
-                    const isThursday = DateUtils.isThursday(new Date(year, month, i));
+                    const isThursday = new Date(year, month, i).getDay() === 4;
                     const holidayName = holidays.get(dateString);
-                    const isAdminHoliday = adminHolidays.includes(dateString);
+                    const isAdminHoliday = adminHolidaysSet.has(dateString);
 
                     day.className = `calendar-day p-1 rounded-lg text-left text-[10px] sm:text-xs`;
                     day.dataset.date = dateString;
@@ -3354,16 +3502,18 @@
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
-                    fragment.appendChild(day);
+                    fragment.appendChild(day); // 添加到 fragment 而非直接操作 DOM
                 }
                 
-                // 一次性插入 DOM，減少重繪
+                // === 優化 1.5: 一次性更新 DOM ===
                 calendarGrid.innerHTML = '';
                 calendarGrid.appendChild(fragment);
+                perfMonitor.end('renderFullCalendar');
             }
 
-            // 渲染外場月曆 (無變動)
+            // 渲染外場月曆 (優化版)
             async renderOutsideCalendar() {
+                perfMonitor.start('renderOutsideCalendar');
                 this.calendarManager.getCalendarDate().setDate(1);
                 const month = this.calendarManager.getMonth();
                 const year = this.calendarManager.getYear();
@@ -3461,30 +3611,34 @@
                     }
                 });
 
-                // 使用 DocumentFragment 優化 DOM 操作
                 const calendarGrid = document.getElementById('calendar-grid');
+                
+                // === 優化 1.5: 使用 DocumentFragment 批量 DOM 操作 (外場月曆) ===
                 const fragment = document.createDocumentFragment();
                 
-                // 渲染前月日期
                 const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
                 const prevLastDay = new Date(year, month, 0).getDate();
+                
+                // 添加上個月的日期佔位
                 for (let i = firstDayIndex; i > 0; i--) {
-                    const prevDay = document.createElement('div');
-                    prevDay.className = 'p-1 sm:p-2 text-center text-gray-300 no-hover';
-                    prevDay.textContent = prevLastDay - i + 1;
-                    fragment.appendChild(prevDay);
+                    const emptyDay = document.createElement('div');
+                    emptyDay.className = 'p-1 sm:p-2 text-center text-gray-300 no-hover';
+                    emptyDay.textContent = prevLastDay - i + 1;
+                    fragment.appendChild(emptyDay);
                 }
 
-                const todayString = DateUtils.getTodayString();
+                const todayString = new Date().toISOString().split('T')[0];
                 const currentUserData = this.authManager.getCurrentUserData();
+                
+                // === 優化: 預先計算 adminHolidays Set 加速查找 ===
+                const adminHolidaysSet = new Set(adminHolidays);
 
                 for (let i = 1; i <= lastDayOfMonth; i++) {
-                    const dateString = DateUtils.formatDate(year, month + 1, i);
+                    const dateString = formatDateString(year, month + 1, i); // 使用快取的日期格式化
                     const day = document.createElement('div');
-                    const currentDate = new Date(year, month, i);
-                    const isThursday = DateUtils.isThursday(currentDate);
+                    const isThursday = new Date(year, month, i).getDay() === 4;
                     const holidayName = holidays.get(dateString);
-                    const isAdminHoliday = adminHolidays.includes(dateString);
+                    const isAdminHoliday = adminHolidaysSet.has(dateString);
 
                     day.className = `calendar-day p-1 rounded-lg text-left text-[10px] sm:text-xs`;
                     day.dataset.date = dateString;
@@ -3679,15 +3833,16 @@
                     }
                     
                     if (dateString === todayString) day.classList.add('today');
-                    fragment.appendChild(day);
+                    fragment.appendChild(day); // 添加到 fragment 而非直接操作 DOM
                 }
                 
-                // 一次性插入 DOM，減少重繪
+                // === 優化 1.5: 一次性更新 DOM ===
                 calendarGrid.innerHTML = '';
                 calendarGrid.appendChild(fragment);
+                perfMonitor.end('renderOutsideCalendar');
             }
             
-            // 事件監聯器 (無變動)
+            // 事件監聯器 (優化版)
             setupEventListeners() {
                 this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
                     e.preventDefault(); this.uiManager.showRegisterForm(); 
@@ -3783,10 +3938,12 @@
                 });
             }
 
-            // 登入狀態監聽 (無變動)
+            // 登入狀態監聽 (優化 4.3: 加入防抖)
             setupAuthStateListener() {
                 onAuthStateChanged(this.auth, async (user) => {
                     this.scheduleManager.cleanupListeners(); // Clean up listeners on auth state change
+                    this.clearCalendarCache(); // 清除快取
+                    
                     if (user) {
                         this.authManager.setCurrentUser(user);
                         const userData = await this.authManager.getUserData(user);
@@ -3797,12 +3954,29 @@
                             
                             this.uiManager.showAppView();
                             
-                            // Setup listener AFTER user data is confirmed
-                            this.scheduleManager.setOnDataChangeCallback(() => {
-                                // 使用統一的 Modal 管理方法檢查
-                                if (this.uiManager.isAnyModalOpen()) return;
-                                this.renderAppView();
-                            });
+                            // === 優化 4.3: 使用防抖的資料變更回調 ===
+                            // 防止短時間內多次資料變更導致重複渲染
+                            const debouncedRender = debounce(() => {
+                                // Prevent re-render if modals are open
+                                if(!this.uiManager.settingsModal.classList.contains('hidden')) return;
+                                if(!this.uiManager.shiftSelectModal.classList.contains('hidden')) return;
+                                if(!this.uiManager.coverShiftModal.classList.contains('hidden')) return;
+                                if(!this.uiManager.vacationTimeModal.classList.contains('hidden')) return;
+                                if(!this.uiManager.deleteUserModal.classList.contains('hidden')) return;
+                                
+                                // 檢查資料是否真的有變更
+                                const allData = this.scheduleManager.getAllData();
+                                const newHash = this.calculateDataHash(allData);
+                                
+                                if (this.calendarCache.dataHash !== newHash) {
+                                    this.calendarCache.dataHash = newHash;
+                                    this.clearCalendarCache(); // 資料變更時清除快取
+                                    this.renderAppView();
+                                    console.log('📅 月曆已更新 (資料變更)');
+                                }
+                            }, 150); // 150ms 防抖延遲
+                            
+                            this.scheduleManager.setOnDataChangeCallback(debouncedRender);
                             
                             this.scheduleManager.setupRealtimeListeners();
                             // Initial render after setup
@@ -3824,10 +3998,24 @@
         // === 初始化應用程式 ===
         // ===================================================================================
         document.addEventListener('DOMContentLoaded', () => {
+            // 隱藏載入畫面
+            const hideLoadingScreen = () => {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.style.opacity = '0';
+                    loadingScreen.style.transition = 'opacity 0.3s ease-out';
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                    }, 300);
+                }
+            };
+            
+            // 延遲一小段時間確保 Firebase 初始化完成
+            setTimeout(hideLoadingScreen, 500);
+            
             new ScheduleApp();
         });
 
     </script>
 </body>
 </html>
-
