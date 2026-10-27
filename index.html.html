@@ -1,29 +1,37 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>韓泰泰排班系統</title>
-    
+
     <!-- === 優化 3.2: 預載入關鍵資源 === -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <link rel="dns-prefetch" href="https://firestore.googleapis.com">
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- === 優化 3.2: 字體加載優化 (font-display: swap) === -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"></noscript>
-    
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet" media="print" onload="this.media='all'">
-    <noscript><link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"
+        media="print" onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap"
+            rel="stylesheet">
+    </noscript>
+
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <noscript>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    </noscript>
     <style>
         /* === 優化 3.1: 關鍵 CSS 內聯 === */
         /* 首屏渲染所需的關鍵樣式，減少 FOUC (Flash of Unstyled Content) */
-        
+
         /* 基礎樣式 */
         body {
             font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -31,42 +39,75 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-        
+
         /* 載入動畫 */
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
+
         .animate-spin {
             animation: spin 1s linear infinite;
         }
-        
+
         /* Material Icons */
         .material-icons-outlined {
             font-size: 1.25rem;
             font-display: swap;
         }
-        
+
         /* 滾動條美化 - 使用 GPU 加速 */
         ::-webkit-scrollbar {
             width: 8px;
         }
+
         ::-webkit-scrollbar-track {
             background: #f1f1f1;
         }
+
         ::-webkit-scrollbar-thumb {
             background: #888;
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-        
+
         /* 避免 Tailwind CSS JIT 編譯器移除動態 class */
-        .bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-indigo-100, .bg-pink-100, .bg-purple-100, .bg-gray-100, .bg-orange-100 {}
-        .text-blue-800, .text-green-800, .text-yellow-800, .text-indigo-800, .text-pink-800, .text-purple-800, .text-gray-800, .text-amber-800, .text-orange-800 {}
-        .border-blue-400, .border-green-400, .border-yellow-400, .border-indigo-400, .border-pink-400, .border-purple-400, .border-gray-400, .border-orange-400 {}
-        .hidden { display: none; }
-        
+        .bg-blue-100,
+        .bg-green-100,
+        .bg-yellow-100,
+        .bg-indigo-100,
+        .bg-pink-100,
+        .bg-purple-100,
+        .bg-gray-100,
+        .bg-orange-100 {}
+
+        .text-blue-800,
+        .text-green-800,
+        .text-yellow-800,
+        .text-indigo-800,
+        .text-pink-800,
+        .text-purple-800,
+        .text-gray-800,
+        .text-amber-800,
+        .text-orange-800 {}
+
+        .border-blue-400,
+        .border-green-400,
+        .border-yellow-400,
+        .border-indigo-400,
+        .border-pink-400,
+        .border-purple-400,
+        .border-gray-400,
+        .border-orange-400 {}
+
+        .hidden {
+            display: none;
+        }
+
         /* 月曆樣式 - 優化動畫性能 */
         .calendar-day {
             transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
@@ -74,45 +115,57 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            will-change: transform; /* GPU 加速提示 */
-            contain: layout style; /* CSS Containment 優化 */
+            will-change: transform;
+            /* GPU 加速提示 */
+            contain: layout style;
+            /* CSS Containment 優化 */
         }
+
         @media (min-width: 640px) {
             .calendar-day {
                 min-height: 7rem;
             }
         }
+
         .calendar-day.cursor-pointer:not(.no-hover):hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
+
         .today {
             box-shadow: inset 0 0 0 2px #4f46e5;
         }
+
         .custom-calendar-grid {
             display: grid;
             grid-template-columns: 1.15fr 1.15fr 1.15fr 1.15fr 0.5fr 1.15fr 1.15fr;
-            contain: layout; /* CSS Containment 優化 */
+            contain: layout;
+            /* CSS Containment 優化 */
         }
-        
+
         /* Modal Style - 優化過渡動畫 */
         #cover-shift-modal.hidden,
         #shift-select-modal.hidden,
         #vacation-time-modal.hidden,
         #delete-user-modal.hidden,
-        #settings-modal.hidden {
+        #settings-modal.hidden,
+        #admin-action-modal.hidden,
+        #admin-swap-modal.hidden {
             display: none;
             opacity: 0;
         }
+
         #cover-shift-modal:not(.hidden),
         #shift-select-modal:not(.hidden),
         #vacation-time-modal:not(.hidden),
         #delete-user-modal:not(.hidden),
-        #settings-modal:not(.hidden) {
+        #settings-modal:not(.hidden),
+        #admin-action-modal:not(.hidden),
+        #admin-swap-modal:not(.hidden) {
             display: flex;
             opacity: 1;
         }
-        
+
         /* 減少重繪的優化 */
         .calendar-day span,
         .calendar-day p {
@@ -120,12 +173,15 @@
         }
     </style>
 </head>
+
 <body class="antialiased text-gray-800">
 
     <!-- === 優化 3.6: 載入動畫 === -->
     <div id="loading-screen" class="fixed inset-0 bg-gray-100 flex items-center justify-center z-[100]">
         <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent"></div>
+            <div
+                class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent">
+            </div>
             <p class="mt-4 text-gray-600 font-medium">載入中...</p>
         </div>
     </div>
@@ -135,46 +191,61 @@
             <div id="login-view">
                 <h2 class="text-2xl font-bold text-center">登入系統</h2>
                 <form id="login-form" class="mt-8 space-y-6">
-                    <input type="text" id="login-username" placeholder="用戶名稱" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <input type="password" id="login-password" placeholder="密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">登入</button>
-                    <p class="text-center text-sm">還沒有帳號？ <a href="#" id="show-register" class="font-medium text-indigo-600 hover:underline">立即註冊</a></p>
+                    <input type="text" id="login-username" placeholder="用戶名稱" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="login-password" placeholder="密碼" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit"
+                        class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">登入</button>
+                    <p class="text-center text-sm">還沒有帳號？ <a href="#" id="show-register"
+                            class="font-medium text-indigo-600 hover:underline">立即註冊</a></p>
                 </form>
             </div>
             <div id="register-view" class="hidden">
                 <h2 class="text-2xl font-bold text-center">註冊新帳號</h2>
                 <form id="register-form" class="mt-8 space-y-6">
-                    <input type="text" id="register-username" placeholder="用戶名稱 (登入用)" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <input type="password" id="register-password" placeholder="密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                    <input type="password" id="register-password-confirm" placeholder="確認密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" id="register-username" placeholder="用戶名稱 (登入用)" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="register-password" placeholder="密碼" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    <input type="password" id="register-password-confirm" placeholder="確認密碼" required
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
                     <div>
-                        <label for="register-role" class="block text-sm font-medium text-gray-700 sr-only">選擇您的職位</label>
-                        <select id="register-role" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                        <label for="register-role"
+                            class="block text-sm font-medium text-gray-700 sr-only">選擇您的職位</label>
+                        <select id="register-role" required
+                            class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
                             <option value="" disabled selected>請選擇您的職位</option>
                             <option value="内場工讀生">内場工讀生</option>
                             <option value="外場工讀生">外場工讀生</option>
                         </select>
                     </div>
-                    <button type="submit" class="w-full p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">註冊</button>
-                    <p class="text-center text-sm">已經有帳號了？ <a href="#" id="show-login" class="font-medium text-indigo-600 hover:underline">返回登入</a></p>
+                    <button type="submit"
+                        class="w-full p-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700">註冊</button>
+                    <p class="text-center text-sm">已經有帳號了？ <a href="#" id="show-login"
+                            class="font-medium text-indigo-600 hover:underline">返回登入</a></p>
                 </form>
             </div>
             <p id="auth-error" class="text-center text-red-500 text-sm mt-4"></p>
         </div>
     </div>
-    
+
     <div id="app" class="hidden min-h-screen p-1 sm:p-4 md:p-8">
         <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-lg p-2 sm:p-6 md:p-8">
-            
+
             <header class="mb-6 md:mb-8">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                     <div class="flex items-center gap-3">
-                        <span class="material-icons-outlined text-2xl md:text-3xl text-indigo-600">event_available</span>
+                        <span
+                            class="material-icons-outlined text-2xl md:text-3xl text-indigo-600">event_available</span>
                         <h1 class="text-2xl md:text-3xl font-bold text-gray-900">韓泰泰排班系統</h1>
                     </div>
                     <div class="flex items-center gap-4">
-                        <p class="text-xs sm:text-sm text-gray-600">使用者: <span id="userName" class="font-semibold bg-gray-100 p-1 rounded"></span> (<span id="userRole" class="font-semibold"></span>)</p>
-                        <button id="settings-btn" class="hidden items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
+                        <p class="text-xs sm:text-sm text-gray-600">使用者: <span id="userName"
+                                class="font-semibold bg-gray-100 p-1 rounded"></span> (<span id="userRole"
+                                class="font-semibold"></span>)</p>
+                        <button id="settings-btn"
+                            class="hidden items-center gap-1 text-sm text-gray-600 hover:text-indigo-600">
                             <span class="material-icons-outlined">settings</span>
                             <span class="hidden sm:inline">個人設定</span>
                         </button>
@@ -193,7 +264,8 @@
             </main>
         </div>
 
-        <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div id="settings-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-md p-8 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-bold">個人設定</h2>
@@ -204,23 +276,29 @@
                 <div class="space-y-8">
                     <form id="change-username-form" class="space-y-4">
                         <h3 class="text-lg font-semibold">修改顯示名稱</h3>
-                        <input type="text" id="new-username" placeholder="新的顯示名稱" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新名稱</button>
+                        <input type="text" id="new-username" placeholder="新的顯示名稱" required
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <button type="submit"
+                            class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新名稱</button>
                         <p id="username-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
                     </form>
                     <hr>
                     <form id="change-password-form" class="space-y-4">
                         <h3 class="text-lg font-semibold">修改密碼</h3>
-                        <input type="password" id="new-password" placeholder="新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <input type="password" id="confirm-new-password" placeholder="確認新密碼" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
-                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
+                        <input type="password" id="new-password" placeholder="新密碼" required
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <input type="password" id="confirm-new-password" placeholder="確認新密碼" required
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        <button type="submit"
+                            class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">更新密碼</button>
                         <p id="password-settings-error" class="text-center text-red-500 text-sm mt-2"></p>
                     </form>
                 </div>
             </div>
         </div>
 
-        <div id="shift-select-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
+        <div id="shift-select-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold">選擇班次</h2>
@@ -230,11 +308,12 @@
                 </div>
                 <p id="shift-select-info" class="text-gray-700 mb-4">您在這天有多個班次，請選擇要找人代班的班次：</p>
                 <div id="shift-select-options" class="space-y-3">
-                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="cover-shift-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
+        <div id="cover-shift-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold">指定代班</h2>
@@ -244,20 +323,24 @@
                 </div>
                 <form id="cover-shift-form">
                     <p id="cover-shift-info" class="text-center text-gray-700 mb-4">
-                        </p>
+                    </p>
                     <div class="space-y-4">
-                        <label for="cover-shift-replacement-select" class="block text-sm font-medium text-gray-700">請選擇代班人員：</label>
-                        <select id="cover-shift-replacement-select" required class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                        <label for="cover-shift-replacement-select"
+                            class="block text-sm font-medium text-gray-700">請選擇代班人員：</label>
+                        <select id="cover-shift-replacement-select" required
+                            class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
                             <option value="" disabled selected>選擇一位外場工讀生</option>
-                            </select>
-                        <button type="submit" class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">確認換班</button>
+                        </select>
+                        <button type="submit"
+                            class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">確認換班</button>
                     </div>
                 </form>
             </div>
         </div>
 
 
-        <div id="vacation-time-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div id="vacation-time-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-blue-600">選擇休假時間</h2>
@@ -268,15 +351,19 @@
                 <div class="space-y-4">
                     <p id="vacation-time-info" class="text-gray-700">請選擇您要休假的時間段：</p>
                     <div class="space-y-3">
-                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input type="checkbox" id="vacation-morning" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                        <label
+                            class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="vacation-morning"
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
                             <div class="flex-1">
                                 <span class="font-medium text-gray-800">早上休假</span>
                                 <p class="text-sm text-gray-500">勾選表示早上休假，不勾選表示可以排早櫃、早班</p>
                             </div>
                         </label>
-                        <label class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                            <input type="checkbox" id="vacation-evening" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
+                        <label
+                            class="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input type="checkbox" id="vacation-evening"
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" checked>
                             <div class="flex-1">
                                 <span class="font-medium text-gray-800">晚上休假</span>
                                 <p class="text-sm text-gray-500">勾選表示晚上休假，不勾選表示可以排晚櫃、晚班、洗碗、收班</p>
@@ -284,10 +371,12 @@
                         </label>
                     </div>
                     <div class="flex gap-3 pt-4">
-                        <button id="confirm-vacation-time-btn" class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
+                        <button id="confirm-vacation-time-btn"
+                            class="flex-1 p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">
                             確認
                         </button>
-                        <button id="cancel-vacation-time-btn" class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
+                        <button id="cancel-vacation-time-btn"
+                            class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
                             取消
                         </button>
                     </div>
@@ -295,7 +384,8 @@
             </div>
         </div>
 
-        <div id="delete-user-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div id="delete-user-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-red-600">確認刪除用戶</h2>
@@ -313,10 +403,12 @@
                         <li>代班記錄</li>
                     </ul>
                     <div class="flex gap-3 pt-4">
-                        <button id="confirm-delete-user-btn" class="flex-1 p-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">
+                        <button id="confirm-delete-user-btn"
+                            class="flex-1 p-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">
                             確認刪除
                         </button>
-                        <button id="cancel-delete-user-btn" class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
+                        <button id="cancel-delete-user-btn"
+                            class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
                             取消
                         </button>
                     </div>
@@ -324,7 +416,60 @@
             </div>
         </div>
 
-        <div id="toast" class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
+        <!-- 管理員操作選單 Modal -->
+        <div id="admin-action-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-sm p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">選擇操作</h2>
+                    <button id="close-admin-action-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <p id="admin-action-info" class="text-gray-700 mb-4 text-center"></p>
+                <div class="space-y-3">
+                    <button id="admin-set-holiday-btn"
+                        class="w-full p-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 flex items-center justify-center gap-2">
+                        <span class="material-icons-outlined">event_busy</span>
+                        設為公休
+                    </button>
+                    <button id="admin-swap-staff-btn"
+                        class="w-full p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <span class="material-icons-outlined">swap_horiz</span>
+                        更換人員
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 管理員更換人員 Modal -->
+        <div id="admin-swap-modal"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white w-full max-w-md p-6 rounded-2xl shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-indigo-600">更換人員</h2>
+                    <button id="close-admin-swap-btn" class="p-2 rounded-full hover:bg-gray-200">
+                        <span class="material-icons-outlined">close</span>
+                    </button>
+                </div>
+                <p id="admin-swap-info" class="text-gray-700 mb-4"></p>
+                <div id="admin-swap-list" class="space-y-3 max-h-[50vh] overflow-y-auto">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button id="confirm-admin-swap-btn"
+                        class="flex-1 p-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">
+                        確認更換
+                    </button>
+                    <button id="cancel-admin-swap-btn"
+                        class="flex-1 p-3 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast"
+            class="fixed bottom-8 right-8 bg-gray-900 text-white py-3 px-6 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-500 ease-in-out">
             <p id="toast-message"></p>
         </div>
     </div>
@@ -332,18 +477,18 @@
     <script type="module">
         // Firebase v9+ modular SDK
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { 
-            getAuth, 
-            createUserWithEmailAndPassword, 
-            signInWithEmailAndPassword, 
-            signOut, 
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut,
             onAuthStateChanged,
             updatePassword
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            setDoc, 
+        import {
+            getFirestore,
+            doc,
+            setDoc,
             getDoc,
             deleteDoc,
             onSnapshot,
@@ -358,7 +503,7 @@
         // ===================================================================================
         // === 工具函數 (Utility Functions) ===
         // ===================================================================================
-        
+
         // 防抖函數 - 用於減少高頻操作
         function debounce(func, wait) {
             let timeout;
@@ -411,10 +556,10 @@
                     timestamp: Date.now(),
                     expiry: Date.now() + (ttlMinutes * 60 * 1000)
                 };
-                
+
                 // 同時存入記憶體和 localStorage
                 this.memoryCache.set(key, cacheData);
-                
+
                 try {
                     localStorage.setItem(this._getKey(key), JSON.stringify(cacheData));
                 } catch (e) {
@@ -451,7 +596,7 @@
                 } catch (e) {
                     console.warn('LocalStorage 讀取失敗:', e.message);
                 }
-                
+
                 return null;
             }
 
@@ -555,13 +700,13 @@
                 if (password !== passwordConfirm) {
                     throw new Error('兩次輸入的密碼不一致。');
                 }
-                
+
                 const q = query(collection(this.db, "users"), where("username_lowercase", "==", username.toLowerCase()));
                 const querySnapshot = await getDocs(q);
                 if (!querySnapshot.empty) {
                     throw new Error('此用戶名稱已被使用。');
                 }
-                
+
                 try {
                     const userCredential = await createUserWithEmailAndPassword(this.auth, `${username.toLowerCase()}@schedule-app.com`, password);
                     const user = userCredential.user;
@@ -615,7 +760,7 @@
 
                 const q = query(collection(this.db, "users"), where("username_lowercase", "==", newUsername.toLowerCase()));
                 const querySnapshot = await getDocs(q);
-                
+
                 let isTaken = false;
                 querySnapshot.forEach(doc => {
                     if (doc.id !== this.currentUser.uid) {
@@ -641,10 +786,10 @@
 
             async getUserData(user) {
                 if (!user) return null;
-                
+
                 const userDocRef = doc(this.db, "users", user.uid);
                 const userDocSnap = await getDoc(userDocRef);
-                
+
                 if (userDocSnap.exists()) {
                     return { uid: user.uid, ...userDocSnap.data() };
                 }
@@ -703,7 +848,7 @@
                 const fetchWithTimeout = (url, timeout = 5000) => {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), timeout);
-                    
+
                     return fetch(url, {
                         method: 'GET',
                         headers: { 'Accept': 'application/json' },
@@ -722,40 +867,40 @@
                     if (!response.ok) throw new Error('Response not ok');
                     const data = await response.json();
                     const holidaysMap = new Map();
-                    
+
                     // 處理不同API格式
                     const holidaysArray = data.holidays || (Array.isArray(data) ? data : []);
                     holidaysArray.forEach(holiday => {
-                        if (holiday.isHoliday) { 
-                           holidaysMap.set(holiday.date, holiday.name);
+                        if (holiday.isHoliday) {
+                            holidaysMap.set(holiday.date, holiday.name);
                         }
                     });
-                    
+
                     if (holidaysMap.size === 0) throw new Error('No holidays found');
                     return holidaysMap;
                 };
 
                 try {
                     console.log(`🌐 並行請求 ${year} 年假日資料...`);
-                    
+
                     // === 優化 2.2: 使用 Promise.any 並行請求，取最快成功的 ===
-                    const fetchPromises = apiUrls.map(url => 
+                    const fetchPromises = apiUrls.map(url =>
                         fetchWithTimeout(url, 5000).then(processResponse)
                     );
-                    
+
                     // Promise.any - 只要有一個成功就返回
                     const holidaysMap = await Promise.any(fetchPromises);
-                    
+
                     console.log(`✅ 成功獲取 ${year} 年假日資料，共 ${holidaysMap.size} 個假日`);
-                    
+
                     // 存入記憶體快取
                     this.holidaysCache[year] = holidaysMap;
-                    
+
                     // === 優化 2.3: 存入本地快取 (7天過期) ===
                     localCache.set(cacheKey, Array.from(holidaysMap.entries()), 60 * 24 * 7);
-                    
+
                     return holidaysMap;
-                    
+
                 } catch (error) {
                     console.warn(`⚠️ 所有 API 請求失敗，返回空假日資料:`, error.message);
                     this.holidaysCache[year] = new Map();
@@ -798,16 +943,16 @@
                 this.allUsers = [];
                 this.unsubscribeListeners = [];
                 this.onDataChangeCallback = null;
-                
+
                 // === 優化 2.5: 從本地快取預先載入資料 ===
                 this._loadFromLocalCache();
             }
-            
+
             // 從本地快取載入資料（用於首次渲染前的快速顯示）
             _loadFromLocalCache() {
                 const cachedData = localCache.get('scheduleData');
                 const cachedUsers = localCache.get('usersList');
-                
+
                 if (cachedData) {
                     this.allData = cachedData;
                     console.log('📦 從本地快取載入排班資料');
@@ -817,7 +962,7 @@
                     console.log('👥 從本地快取載入用戶列表');
                 }
             }
-            
+
             // 儲存資料到本地快取
             _saveToLocalCache() {
                 // 排班資料快取 30 分鐘
@@ -865,7 +1010,7 @@
                         this.onDataChangeCallback();
                     }
                 });
-                
+
                 this.unsubscribeListeners.push(unsubData, unsubUsers);
             }
 
@@ -884,15 +1029,15 @@
 
             async updateUserVacation(userId, year, month, vacations) {
                 const vacationKey = `${userId}-${year}-${month}`;
-                await setDoc(doc(this.db, "scheduleData", "main"), { 
-                    userVacations: { ...this.allData.userVacations, [vacationKey]: vacations } 
+                await setDoc(doc(this.db, "scheduleData", "main"), {
+                    userVacations: { ...this.allData.userVacations, [vacationKey]: vacations }
                 }, { merge: true });
             }
 
             async updateUserAvailability(userId, year, month, availability) {
                 const availabilityKey = `${userId}-${year}-${month}`;
-                await setDoc(doc(this.db, "scheduleData", "main"), { 
-                    userAvailability: { ...this.allData.userAvailability, [availabilityKey]: availability } 
+                await setDoc(doc(this.db, "scheduleData", "main"), {
+                    userAvailability: { ...this.allData.userAvailability, [availabilityKey]: availability }
                 }, { merge: true });
             }
 
@@ -907,24 +1052,24 @@
                 const legacyData = currentVacationTimes[legacyKey] || {};
                 const normalizedData = currentVacationTimes[normalizedKey] || {};
                 const userVacationTimes = { ...legacyData, ...normalizedData };
-                
+
                 userVacationTimes[date] = vacationData;
-                
+
                 // 準備要更新到資料庫的大物件
                 const updatedVacationTimes = { ...currentVacationTimes };
                 updatedVacationTimes[normalizedKey] = userVacationTimes;
-                
+
                 // 如果 legacyKey 存在且與 normalizedKey 不同，也要同步更新它
                 if (legacyKey !== normalizedKey && currentVacationTimes[legacyKey]) {
                     const updatedLegacyData = { ...currentVacationTimes[legacyKey] };
                     updatedLegacyData[date] = vacationData;
                     updatedVacationTimes[legacyKey] = updatedLegacyData;
                 }
-                
-                await setDoc(doc(this.db, "scheduleData", "main"), { 
+
+                await setDoc(doc(this.db, "scheduleData", "main"), {
                     userVacationTimes: updatedVacationTimes
                 }, { merge: true });
-                
+
                 // 立即更新本地數據，確保月曆能立即反映變更
                 this.allData.userVacationTimes = updatedVacationTimes;
             }
@@ -939,11 +1084,11 @@
                     const currentData = this.allData;
                     // 更新 coverSignups 並保持其他資料不變
                     const updatedData = { ...currentData, coverSignups: signups };
-                    
+
                     console.log('更新代班資料到資料庫:', updatedData.coverSignups);
-                    
+
                     await setDoc(doc(this.db, "scheduleData", "main"), updatedData);
-                    
+
                     console.log('代班資料更新成功');
                 } catch (error) {
                     console.error('更新代班資料失敗:', error);
@@ -979,28 +1124,28 @@
                 // === 優化 2.4: 使用 writeBatch 批量寫入 ===
                 try {
                     console.log('開始刪除用戶:', userId);
-                    
+
                     const batch = writeBatch(this.db);
-                    
+
                     // 1. 刪除用戶文檔
                     batch.delete(doc(this.db, "users", userId));
-                    
+
                     // 2. 清理所有相關數據
                     const currentData = this.allData;
                     const updatedData = deepClone(currentData); // 使用優化的深拷貝
-                    
+
                     // 清理 userVacations
                     const userVacationKeys = Object.keys(updatedData.userVacations || {}).filter(key => key.startsWith(`${userId}-`));
                     userVacationKeys.forEach(key => {
                         delete updatedData.userVacations[key];
                     });
-                    
+
                     // 清理 userAvailability
                     const userAvailabilityKeys = Object.keys(updatedData.userAvailability || {}).filter(key => key.startsWith(`${userId}-`));
                     userAvailabilityKeys.forEach(key => {
                         delete updatedData.userAvailability[key];
                     });
-                    
+
                     // 清理 coverSignups 中該用戶的代班記錄
                     const updatedCoverSignups = { ...updatedData.coverSignups };
                     Object.keys(updatedCoverSignups).forEach(key => {
@@ -1009,7 +1154,7 @@
                         }
                     });
                     updatedData.coverSignups = updatedCoverSignups;
-                    
+
                     // 清理 manualAssignments 中該用戶的排班記錄
                     const updatedManualAssignments = { ...updatedData.manualAssignments };
                     Object.keys(updatedManualAssignments).forEach(dateKey => {
@@ -1018,7 +1163,7 @@
                         }
                     });
                     updatedData.manualAssignments = updatedManualAssignments;
-                    
+
                     // 清理 outsideSchedule 中該用戶的排班記錄
                     const updatedOutsideSchedule = { ...updatedData.outsideSchedule };
                     Object.keys(updatedOutsideSchedule).forEach(dateKey => {
@@ -1027,14 +1172,14 @@
                         }
                     });
                     updatedData.outsideSchedule = updatedOutsideSchedule;
-                    
+
                     // 3. 批量更新數據庫
                     batch.set(doc(this.db, "scheduleData", "main"), updatedData);
-                    
+
                     // 4. 執行批量操作 (原子性：全部成功或全部失敗)
                     await batch.commit();
                     console.log('✅ 用戶及相關數據已批量刪除完成');
-                    
+
                 } catch (error) {
                     console.error('刪除用戶失敗:', error);
                     throw error;
@@ -1079,14 +1224,14 @@
                 this.closeShiftSelectBtn = document.getElementById('close-shift-select-btn');
                 this.shiftSelectInfo = document.getElementById('shift-select-info');
                 this.shiftSelectOptions = document.getElementById('shift-select-options');
-                
+
                 // 代班人選擇 Modal
                 this.coverShiftModal = document.getElementById('cover-shift-modal');
                 this.closeCoverShiftBtn = document.getElementById('close-cover-shift-btn');
                 this.coverShiftForm = document.getElementById('cover-shift-form');
                 this.coverShiftInfo = document.getElementById('cover-shift-info');
                 this.coverShiftSelect = document.getElementById('cover-shift-replacement-select');
-                
+
                 // 休假時間選擇 Modal
                 this.vacationTimeModal = document.getElementById('vacation-time-modal');
                 this.closeVacationTimeBtn = document.getElementById('close-vacation-time-btn');
@@ -1095,13 +1240,28 @@
                 this.vacationTimeInfo = document.getElementById('vacation-time-info');
                 this.vacationMorningCheckbox = document.getElementById('vacation-morning');
                 this.vacationEveningCheckbox = document.getElementById('vacation-evening');
-                
+
                 // 刪除用戶 Modal
                 this.deleteUserModal = document.getElementById('delete-user-modal');
                 this.closeDeleteUserBtn = document.getElementById('close-delete-user-btn');
                 this.confirmDeleteUserBtn = document.getElementById('confirm-delete-user-btn');
                 this.cancelDeleteUserBtn = document.getElementById('cancel-delete-user-btn');
                 this.deleteUserInfo = document.getElementById('delete-user-info');
+
+                // 管理員操作 Modal
+                this.adminActionModal = document.getElementById('admin-action-modal');
+                this.closeAdminActionBtn = document.getElementById('close-admin-action-btn');
+                this.adminSetHolidayBtn = document.getElementById('admin-set-holiday-btn');
+                this.adminSwapStaffBtn = document.getElementById('admin-swap-staff-btn');
+                this.adminActionInfo = document.getElementById('admin-action-info');
+
+                // 管理員更換人員 Modal
+                this.adminSwapModal = document.getElementById('admin-swap-modal');
+                this.closeAdminSwapBtn = document.getElementById('close-admin-swap-btn');
+                this.confirmAdminSwapBtn = document.getElementById('confirm-admin-swap-btn');
+                this.cancelAdminSwapBtn = document.getElementById('cancel-admin-swap-btn');
+                this.adminSwapInfo = document.getElementById('admin-swap-info');
+                this.adminSwapList = document.getElementById('admin-swap-list');
             }
 
             showToast(message) {
@@ -1215,17 +1375,17 @@
             // 顯示休假時間選擇 Modal
             showVacationTimeModal(date, currentVacationData = null) {
                 this.vacationTimeInfo.textContent = `請選擇您在 ${date} 的休假時間段：`;
-                
+
                 // 設置默認值（兩個都勾選表示全天休假）
                 this.vacationMorningCheckbox.checked = true;
                 this.vacationEveningCheckbox.checked = true;
-                
+
                 // 如果有現有的休假數據，根據數據設置勾選狀態
                 if (currentVacationData) {
                     this.vacationMorningCheckbox.checked = currentVacationData.morning || false;
                     this.vacationEveningCheckbox.checked = currentVacationData.evening || false;
                 }
-                
+
                 this.vacationTimeModal.classList.remove('hidden');
             }
 
@@ -1270,6 +1430,53 @@
             setUsernameError(message) {
                 this.usernameSettingsError.textContent = message;
             }
+
+            // 顯示管理員操作 Modal
+            showAdminActionModal(date) {
+                this.adminActionInfo.textContent = `${date} — 請選擇操作：`;
+                this.adminActionModal.classList.remove('hidden');
+            }
+
+            hideAdminActionModal() {
+                this.adminActionModal.classList.add('hidden');
+            }
+
+            // 顯示管理員更換人員 Modal
+            showAdminSwapModal(date, currentStaff, replacementCandidates) {
+                this.adminSwapInfo.textContent = `${date} 當天上班人員：`;
+                this.adminSwapList.innerHTML = '';
+
+                currentStaff.forEach((staff, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center gap-3 p-3 bg-gray-50 border rounded-lg';
+
+                    let optionsHtml = `<option value="${staff.username}">不更換</option>`;
+                    replacementCandidates.forEach(candidate => {
+                        if (candidate.username !== staff.username) {
+                            optionsHtml += `<option value="${candidate.username}">${candidate.username} (${candidate.role})</option>`;
+                        }
+                    });
+
+                    div.innerHTML = `
+                        <div class="flex-1 min-w-0">
+                            <p class="font-semibold text-gray-800 truncate">${staff.username}</p>
+                            <p class="text-sm text-gray-500">${staff.shift}</p>
+                        </div>
+                        <select class="admin-swap-select p-2 border border-gray-300 rounded-lg text-sm flex-shrink-0" data-index="${index}">
+                            ${optionsHtml}
+                        </select>
+                    `;
+
+                    this.adminSwapList.appendChild(div);
+                });
+
+                this.adminSwapModal.classList.remove('hidden');
+            }
+
+            hideAdminSwapModal() {
+                this.adminSwapModal.classList.add('hidden');
+                this.adminSwapList.innerHTML = '';
+            }
         }
 
         // ===================================================================================
@@ -1286,7 +1493,9 @@
                 this.pendingVacationDate = null;
                 this.currentCalendarView = 'outside'; // 初始化月曆視圖類型，默認顯示外場月曆
                 this._dayClickInProgress = false; // 防止快速重複點擊的標記
-                
+                this.pendingAdminActionDate = null; // 管理員操作待處理日期
+                this.pendingSwapData = null; // 管理員更換人員待處理資料
+
                 // === 優化 1.4: 月曆快取系統 (Diff Rendering) ===
                 this.calendarCache = {
                     inside: new Map(), // 內場月曆快取: dateString -> cellHTML
@@ -1295,7 +1504,7 @@
                     lastRenderedYear: null, // 上次渲染的年份
                     dataHash: null // 資料雜湊值，用於檢測變更
                 };
-                
+
                 // === (NEW) Define shift options ===
                 this.insideShifts = [
                     "備菜班 (早)", "備菜班 (晚)", "備菜班 (全日)",
@@ -1309,7 +1518,7 @@
                     "櫃檯" // 外場櫃檯
                 ];
             }
-            
+
             // === 優化 1.4: 計算資料雜湊值，快速檢測變更 ===
             calculateDataHash(data) {
                 // 簡單的雜湊計算，用於快速比較資料是否變更
@@ -1322,7 +1531,7 @@
                 }
                 return hash;
             }
-            
+
             // === 優化 1.4: 清除月曆快取 ===
             clearCalendarCache() {
                 this.calendarCache.inside.clear();
@@ -1335,13 +1544,13 @@
                 // === 重要：請將下方的 firebaseConfig 物件替換成您自己的 Firebase 專案設定 ===
                 // ===================================================================================
                 const firebaseConfig = {
-                apiKey: "AIzaSyBEMnLL-ppl8-jQnA1RzZW8JfsUjCqEOFQ",
-                authDomain: "schedule-hantaitai.firebaseapp.com",
-                databaseURL: "https://schedule-hantaitai-default-rtdb.asia-southeast1.firebasedatabase.app",
-                projectId: "schedule-hantaitai",
-                storageBucket: "schedule-hantaitai.firebasestorage.app",
-                messagingSenderId: "600535535784",
-                appId: "1:600535535784:web:397ad1387e60f87479b29d"
+                    apiKey: "AIzaSyBEMnLL-ppl8-jQnA1RzZW8JfsUjCqEOFQ",
+                    authDomain: "schedule-hantaitai.firebaseapp.com",
+                    databaseURL: "https://schedule-hantaitai-default-rtdb.asia-southeast1.firebasedatabase.app",
+                    projectId: "schedule-hantaitai",
+                    storageBucket: "schedule-hantaitai.firebasestorage.app",
+                    messagingSenderId: "600535535784",
+                    appId: "1:600535535784:web:397ad1387e60f87479b29d"
                 };
                 // ===================================================================================
 
@@ -1349,7 +1558,7 @@
                 const app = initializeApp(firebaseConfig);
                 this.auth = getAuth(app);
                 this.db = getFirestore(app);
-                
+
                 // === 啟用 Firestore 離線持久化 (優化 2.6) ===
                 // 這讓資料在本地 IndexedDB 快取，大幅減少網路請求
                 enableIndexedDbPersistence(this.db)
@@ -1385,26 +1594,26 @@
             // 統一的排班邏輯核心函數
             generateDaySchedule(dateString, dayOfWeek, counterVacation, availableWorkers, workerUnavailability, workerVacationTimes, workerWorkDays) {
                 const daySchedule = [];
-                
+
                 if (counterVacation) {
                     // 櫃檯休假：平日不排「早班」，假日維持含「早班」
-                    const dayAvailableWorkers = availableWorkers.filter(worker => 
+                    const dayAvailableWorkers = availableWorkers.filter(worker =>
                         !workerUnavailability[worker.username].includes(dateString)
                     );
-                    
+
                     if (dayAvailableWorkers.length > 0) {
                         // 平日（週一至週五）：早櫃、晚櫃、洗碗、收班；假日：含早班共五班
                         let shifts = (dayOfWeek >= 1 && dayOfWeek <= 5)
                             ? ["早櫃", "晚櫃", "洗碗", "收班"]
                             : ["早櫃", "早班", "晚櫃", "洗碗", "收班"];
-                        
+
                         // 平均分配班別給可用的工讀生
-                        const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                        const sortedWorkers = dayAvailableWorkers.sort((a, b) =>
                             workerWorkDays[a.username] - workerWorkDays[b.username]
                         );
                         // 打亂班別以隨機分配
                         const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                        
+
                         // 分配邏輯：
                         // 1. 優先把班別分配給不同的人
                         // 2. 如果人數不足，允許同一個人上多個班，但要檢查衝突
@@ -1412,11 +1621,11 @@
                         for (const shift of shuffledShifts) {
                             let assigned = false;
                             let attempt = 0;
-                            
+
                             // 嘗試分配給下一個工人，最多繞一圈
                             while (!assigned && attempt < sortedWorkers.length) {
                                 const worker = sortedWorkers[workerIndex % sortedWorkers.length];
-                                
+
                                 let hasConflict = false;
                                 const morningGroup = ["早櫃", "早班"];
                                 const eveningGroup = ["晚櫃", "洗碗", "收班"];
@@ -1429,7 +1638,7 @@
                                             hasConflict = true;
                                             break;
                                         }
-                                        
+
                                         // Rule 2: "晚櫃", "洗碗", and "收班" cannot be the same person
                                         if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
                                             hasConflict = true;
@@ -1437,7 +1646,7 @@
                                         }
                                     }
                                 }
-                                
+
                                 // 檢查工人是否可以在這個班次工作（考慮分時段休假）
                                 if (!hasConflict && this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes)) {
                                     daySchedule.push({
@@ -1448,7 +1657,7 @@
                                     workerWorkDays[worker.username]++;
                                     assigned = true;
                                 }
-                                
+
                                 workerIndex++;
                                 attempt++;
                             }
@@ -1456,10 +1665,10 @@
                     }
                 } else {
                     // 正常排班
-                    const dayAvailableWorkers = availableWorkers.filter(worker => 
+                    const dayAvailableWorkers = availableWorkers.filter(worker =>
                         !workerUnavailability[worker.username].includes(dateString)
                     );
-                    
+
                     if (dayAvailableWorkers.length > 0) {
                         // 根據星期幾決定班別（不包含櫃檯，因為櫃檯人員已經上班）
                         let shifts = [];
@@ -1470,31 +1679,31 @@
                             // 星期六、星期日：早班、收班、洗碗（櫃檯由櫃檯人員擔任）
                             shifts = ["早班", "收班", "洗碗"];
                         }
-                        
+
                         // 平均分配班別給可用的工讀生
-                        const sortedWorkers = dayAvailableWorkers.sort((a, b) => 
+                        const sortedWorkers = dayAvailableWorkers.sort((a, b) =>
                             workerWorkDays[a.username] - workerWorkDays[b.username]
                         );
                         const shuffledShifts = [...shifts].sort(() => Math.random() - 0.5);
-                        
+
                         // 為每個班次尋找合適的工人，而不是綁定索引
                         let workerIndex = 0;
                         for (const shift of shuffledShifts) {
                             let assigned = false;
                             let attempt = 0;
-                            
+
                             // 嘗試分配給下一個工人，最多繞一圈
                             while (!assigned && attempt < sortedWorkers.length) {
                                 const worker = sortedWorkers[workerIndex % sortedWorkers.length];
-                                
+
                                 // 檢查工人是否可以在這個班次工作（考慮分時段休假）
                                 const canWork = this.isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes);
-                                
+
                                 // 檢查衝突：使用與櫃檯休假相同的分組規則
                                 let hasConflict = false;
                                 const morningGroup = ["早班"];  // 正常排班時，只有早班屬於早班組
                                 const eveningGroup = ["洗碗", "收班"];  // 洗碗、收班屬於晚班組
-                                
+
                                 for (const existing of daySchedule) {
                                     if (existing.username === worker.username) {
                                         // Rule 1: 早班組內不能重複（這裡只有一個早班，所以不會衝突）
@@ -1502,7 +1711,7 @@
                                             hasConflict = true;
                                             break;
                                         }
-                                        
+
                                         // Rule 2: 晚班組內不能重複（洗碗、收班不能同一人）
                                         if (eveningGroup.includes(shift) && eveningGroup.includes(existing.shift)) {
                                             hasConflict = true;
@@ -1510,7 +1719,7 @@
                                         }
                                     }
                                 }
-                                
+
                                 if (canWork && !hasConflict) {
                                     daySchedule.push({
                                         username: worker.username,
@@ -1520,26 +1729,26 @@
                                     workerWorkDays[worker.username]++;
                                     assigned = true;
                                 }
-                                
+
                                 workerIndex++;
                                 attempt++;
                             }
                         }
                     }
                 }
-                
+
                 return daySchedule;
             }
 
             async handleRegister(e) {
                 e.preventDefault();
                 this.uiManager.setAuthError('');
-                
+
                 const username = this.uiManager.registerForm.querySelector('#register-username').value.trim();
                 const password = this.uiManager.registerForm.querySelector('#register-password').value;
                 const passwordConfirm = this.uiManager.registerForm.querySelector('#register-password-confirm').value;
                 const role = this.uiManager.registerForm.querySelector('#register-role').value;
-                
+
                 try {
                     await this.authManager.register(username, password, passwordConfirm, role);
                     this.uiManager.showToast('註冊成功！');
@@ -1551,10 +1760,10 @@
             async handleLogin(e) {
                 e.preventDefault();
                 this.uiManager.setAuthError('');
-                
+
                 const username = this.uiManager.loginForm.querySelector('#login-username').value.trim().toLowerCase();
                 const password = this.uiManager.loginForm.querySelector('#login-password').value;
-                
+
                 try {
                     await this.authManager.login(username, password);
                 } catch (error) {
@@ -1569,7 +1778,7 @@
             async handleChangePassword(e) {
                 e.preventDefault();
                 this.uiManager.setPasswordError('');
-                
+
                 const newPassword = this.uiManager.changePasswordForm.querySelector('#new-password').value;
                 const confirmNewPassword = this.uiManager.changePasswordForm.querySelector('#confirm-new-password').value;
 
@@ -1586,7 +1795,7 @@
             async handleChangeUsername(e) {
                 e.preventDefault();
                 this.uiManager.setUsernameError('');
-                
+
                 const newUsernameInput = this.uiManager.changeUsernameForm.querySelector('#new-username');
                 const newUsername = newUsernameInput.value.trim();
 
@@ -1604,32 +1813,37 @@
                 if (this._dayClickInProgress) return;
                 this._dayClickInProgress = true;
                 setTimeout(() => { this._dayClickInProgress = false; }, 300);
-                
+
                 const dayDiv = e.target.closest('.calendar-day');
                 if (!dayDiv || !dayDiv.dataset.date) return;
-                
+
                 const clickedDateStr = dayDiv.dataset.date;
                 const [year, month, day] = clickedDateStr.split('-').map(Number);
                 const clickedDate = new Date(year, month - 1, day);
                 const allData = this.scheduleManager.getAllData();
                 const { adminHolidays: currentAdminHolidays = [], userVacations = {} } = allData;
-                
+
                 if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
                     if (clickedDate.getDay() === 4) return this.uiManager.showToast("星期四是固定公休日，無法更改。");
-                    
-                    const newAdminHolidays = currentAdminHolidays.includes(clickedDateStr)
-                        ? currentAdminHolidays.filter(d => d !== clickedDateStr)
-                        : [...currentAdminHolidays, clickedDateStr];
-                    
-                    await this.scheduleManager.updateAdminHolidays(newAdminHolidays);
-                    this.uiManager.showToast(currentAdminHolidays.includes(clickedDateStr) ? `${clickedDateStr} 已取消公休。` : `${clickedDateStr} 已設定為公休日。`);
+
+                    // 如果已經是手動設定的公休日 → 直接取消
+                    if (currentAdminHolidays.includes(clickedDateStr)) {
+                        const newAdminHolidays = currentAdminHolidays.filter(d => d !== clickedDateStr);
+                        await this.scheduleManager.updateAdminHolidays(newAdminHolidays);
+                        this.uiManager.showToast(`${clickedDateStr} 已取消公休。`);
+                        return;
+                    }
+
+                    // 非公休日 → 顯示操作選單（公休 / 更換人員）
+                    this.pendingAdminActionDate = clickedDateStr;
+                    this.uiManager.showAdminActionModal(clickedDateStr);
                     return;
                 }
-                
+
                 if (clickedDate.getDay() === 4 || currentAdminHolidays.includes(clickedDateStr)) {
                     return this.uiManager.showToast("此日為公休日，無法排班");
                 }
-                
+
                 const [yearFromStr, monthFromStr] = clickedDateStr.split('-');
 
                 if (this.FULLTIME_ROLES.includes(this.authManager.getCurrentUserData().role)) {
@@ -1645,14 +1859,14 @@
                 const vacationKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
                 const currentVacations = userVacations[vacationKey] || [];
                 const isVacation = currentVacations.includes(clickedDateStr);
-                
+
                 let newVacations;
 
                 if (isVacation) {
                     newVacations = currentVacations.filter(d => d !== clickedDateStr);
                 } else {
-                    if(currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
-                    
+                    if (currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
+
                     const allUsers = this.scheduleManager.getAllUsers();
                     const otherFullTimers = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && this.FULLTIME_ROLES.includes(u.role));
                     let isDayTaken = false;
@@ -1668,10 +1882,10 @@
                     if (isDayTaken) {
                         return this.uiManager.showToast(`已有其他正職人員於此日排休，無法選擇。`);
                     }
-                    
+
                     newVacations = [...currentVacations, clickedDateStr];
                 }
-                
+
                 await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
             }
 
@@ -1682,26 +1896,26 @@
                 const newAvailability = currentAvailability.includes(clickedDateStr)
                     ? currentAvailability.filter(d => d !== clickedDateStr)
                     : [...currentAvailability, clickedDateStr];
-                    
+
                 await this.scheduleManager.updateUserAvailability(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newAvailability);
             }
 
             async handleOutsideDayClick(clickedDateStr, yearFromStr, monthFromStr, userVacations) {
                 const currentUserData = this.authManager.getCurrentUserData();
-                
+
                 if (currentUserData.role === "外場櫃檯") {
                     // 外場櫃檯的休假邏輯（類似內場備菜班）
                     const vacationKey = `${this.authManager.getCurrentUser().uid}-${yearFromStr}-${parseInt(monthFromStr)}`;
                     const currentVacations = userVacations[vacationKey] || [];
                     const isVacation = currentVacations.includes(clickedDateStr);
-                    
+
                     let newVacations;
 
                     if (isVacation) {
                         newVacations = currentVacations.filter(d => d !== clickedDateStr);
                     } else {
-                        if(currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
-                        
+                        if (currentVacations.length >= 5) return this.uiManager.showToast('本月休假已選滿5天');
+
                         const allUsers = this.scheduleManager.getAllUsers();
                         const otherCounterStaff = allUsers.filter(u => u.id !== this.authManager.getCurrentUser().uid && u.role === "外場櫃檯");
                         let isDayTaken = false;
@@ -1717,30 +1931,30 @@
                         if (isDayTaken) {
                             return this.uiManager.showToast(`已有其他外場櫃檯於此日排休，無法選擇。`);
                         }
-                        
+
                         newVacations = [...currentVacations, clickedDateStr];
                     }
-                    
+
                     await this.scheduleManager.updateUserVacation(this.authManager.getCurrentUser().uid, yearFromStr, parseInt(monthFromStr), newVacations);
-                
+
                 } else if (currentUserData.role === "外場工讀生") {
-                    
+
                     const allData = this.scheduleManager.getAllData();
                     const { outsideSchedule = {}, userAvailability = {} } = allData;
-                    
+
                     // 檢查當天自己被排了哪些班
                     const myShifts = (outsideSchedule[clickedDateStr] || []).filter(
                         s => s.username === currentUserData.username
                     );
-                    
+
                     if (myShifts.length > 1) {
                         // === 情境1: 多個班次，顯示班次選擇器 ===
                         this.uiManager.showShiftSelectModal(clickedDateStr, myShifts);
-                    
+
                     } else if (myShifts.length === 1) {
                         // === 情境2: 一個班次，直接顯示同事選擇器 ===
                         const allUsers = this.scheduleManager.getAllUsers();
-                        const replacementOptions = allUsers.filter(u => 
+                        const replacementOptions = allUsers.filter(u =>
                             u.role === "外場工讀生" && u.id !== this.authManager.getCurrentUser().uid
                         );
                         const shiftToCover = myShifts[0].shift;
@@ -1760,7 +1974,7 @@
 
                 // 2. 準備並顯示同事選擇 modal
                 const allUsers = this.scheduleManager.getAllUsers();
-                const replacementOptions = allUsers.filter(u => 
+                const replacementOptions = allUsers.filter(u =>
                     u.role === "外場工讀生" && u.id !== this.authManager.getCurrentUser().uid
                 );
 
@@ -1770,17 +1984,17 @@
             // 處理代班人指派的函式
             async handleAssignCoverShift(e) {
                 e.preventDefault();
-                
+
                 // 從表單的 dataset 獲取資訊
                 const date = this.uiManager.coverShiftForm.dataset.date;
                 const shift = this.uiManager.coverShiftForm.dataset.shift;
-                
+
                 // 獲取選擇的代班人員
                 const replacementUserId = this.uiManager.coverShiftSelect.value;
                 if (!replacementUserId) {
                     return this.uiManager.showToast("請選擇一位代班人員");
                 }
-                
+
                 const replacementUser = this.scheduleManager.getAllUsers().find(u => u.id === replacementUserId);
                 if (!replacementUser) {
                     return this.uiManager.showToast("代班人員資料錯誤");
@@ -1793,32 +2007,32 @@
                     const allData = this.scheduleManager.getAllData();
                     // === 優化 1.2: 使用優化的深拷貝 ===
                     const newOutsideSchedule = deepClone(allData.outsideSchedule || {});
-                    
+
                     const daySchedule = newOutsideSchedule[date];
                     if (!daySchedule) {
                         throw new Error("找不到當天的排班資料");
                     }
-                    
+
                     // 找到使用者原有的班次
-                    const originalShiftIndex = daySchedule.findIndex(s => 
-                        s.username === this.authManager.getCurrentUserData().username && 
+                    const originalShiftIndex = daySchedule.findIndex(s =>
+                        s.username === this.authManager.getCurrentUserData().username &&
                         s.shift === shift
                     );
-                    
+
                     if (originalShiftIndex === -1) {
                         throw new Error("找不到您原有的班次，可能已被更動");
                     }
-                    
+
                     // === 執行換班 ===
                     // 將該班次的 username 換成代班人的 username
                     daySchedule[originalShiftIndex].username = replacementUser.username;
-                    
+
                     // 將修改後的排班表寫回資料庫
                     await this.scheduleManager.updateOutsideSchedule(newOutsideSchedule);
-                    
+
                     this.uiManager.showToast("換班成功！");
                     this.uiManager.hideCoverShiftModal();
-                    
+
                     // 刷新月曆顯示最新的排班資料
                     await this.renderOutsideCalendar();
 
@@ -1846,13 +2060,13 @@
                     await this.scheduleManager.deleteUser(this.pendingDeleteUser.id);
                     this.uiManager.showToast(`用戶「${this.pendingDeleteUser.username}」已成功刪除`);
                     this.uiManager.hideDeleteUserModal();
-                    
+
                     // 重新生成用戶管理列表
                     this.generateUserManagementLists();
-                    
+
                     // 清除待刪除用戶
                     this.pendingDeleteUser = null;
-                    
+
                 } catch (error) {
                     console.error('刪除用戶失敗:', error);
                     this.uiManager.showToast(`刪除用戶失敗：${error.message}`);
@@ -1864,16 +2078,16 @@
                 // month 可能含前導 0，轉為數字避免 key 不一致
                 const numericMonth = parseInt(month, 10);
                 this.pendingVacationDate = { date, year, month: numericMonth };
-                
+
                 // 檢查是否有現有的休假數據
                 const allData = this.scheduleManager.getAllData();
                 const vacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${numericMonth}`;
                 const legacyVacationTimeKey = `${this.authManager.getCurrentUser().uid}-${year}-${String(numericMonth).padStart(2, '0')}`;
-                const userVacationTimes = allData.userVacationTimes?.[vacationTimeKey] 
-                    || allData.userVacationTimes?.[legacyVacationTimeKey] 
+                const userVacationTimes = allData.userVacationTimes?.[vacationTimeKey]
+                    || allData.userVacationTimes?.[legacyVacationTimeKey]
                     || {};
                 const currentVacationData = userVacationTimes[date];
-                
+
                 this.uiManager.showVacationTimeModal(date, currentVacationData);
             }
 
@@ -1909,13 +2123,13 @@
                     const allData = this.scheduleManager.getAllData();
                     const availabilityKey = `${this.authManager.getCurrentUser().uid}-${year}-${month}`;
                     const currentAvailability = allData.userAvailability?.[availabilityKey] || [];
-                    
+
                     if (currentAvailability.includes(date)) {
                         const newAvailability = currentAvailability.filter(d => d !== date);
                         await this.scheduleManager.updateUserAvailability(
-                            this.authManager.getCurrentUser().uid, 
-                            year, 
-                            month, 
+                            this.authManager.getCurrentUser().uid,
+                            year,
+                            month,
                             newAvailability
                         );
                     }
@@ -1933,40 +2147,40 @@
 
                     this.uiManager.showToast(message);
                     this.uiManager.hideVacationTimeModal();
-                    
+
                     // 清除待處理的休假日期
                     this.pendingVacationDate = null;
-                    
+
                     // 手動觸發月曆重新渲染，確保休假時間立即更新
                     this.renderAppView();
-                    
+
                 } catch (error) {
                     console.error('更新休假時間失敗:', error);
                     this.uiManager.showToast(`更新休假時間失敗：${error.message}`);
                 }
             }
-            
+
             // 檢查外場工讀生休假是否超過限制
             async checkOutsideWorkerVacationLimit(dateString, year, month, requestMorning, requestEvening) {
                 const allUsers = this.scheduleManager.getAllUsers();
                 const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, userVacationTimes = {} } = allData;
-                
+
                 // 1. 獲取所有外場工讀生
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 const totalWorkers = outsideWorkers.length;
-                
+
                 if (totalWorkers === 0) {
                     return { allowed: false, message: '沒有外場工讀生' };
                 }
-                
+
                 // 2. 判斷該日期是平日還是假日
                 const [yearStr, monthStr, dayStr] = dateString.split('-');
                 const targetDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, parseInt(dayStr));
                 const dayOfWeek = targetDate.getDay();
                 const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6); // 週六或週日
                 const isWeekday = (dayOfWeek >= 1 && dayOfWeek <= 5); // 週一到週五
-                
+
                 // 3. 檢查外場櫃檯是否休假
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
                 let isCounterVacation = false;
@@ -1978,11 +2192,11 @@
                         break;
                     }
                 }
-                
+
                 // 4. 根據條件決定需要多少位工讀生上班
                 let requiredMorningWorkers = 0;
                 let requiredEveningWorkers = 0;
-                
+
                 if (isWeekday && !isCounterVacation) {
                     // 平日 + 櫃檯上班：需要2位（洗碗、收班）- 都是晚上班次
                     requiredMorningWorkers = 0;
@@ -2000,24 +2214,24 @@
                     requiredMorningWorkers = 2; // 早櫃、早班
                     requiredEveningWorkers = 3; // 晚櫃、洗碗、收班
                 }
-                
+
                 // 5. 計算已經休假的工讀生人數（不包括當前用戶）
                 let morningVacationCount = 0;
                 let eveningVacationCount = 0;
-                
+
                 const currentUserId = this.authManager.getCurrentUser().uid;
-                
+
                 for (const worker of outsideWorkers) {
                     if (worker.id === currentUserId) continue; // 不計算自己
-                    
+
                     const numericMonth = parseInt(month, 10);
                     const vacationTimeKey = `${worker.id}-${year}-${numericMonth}`;
                     const legacyVacationTimeKey = `${worker.id}-${year}-${String(numericMonth).padStart(2, '0')}`;
-                    const workerVacationTimes = userVacationTimes[vacationTimeKey] 
-                        || userVacationTimes[legacyVacationTimeKey] 
+                    const workerVacationTimes = userVacationTimes[vacationTimeKey]
+                        || userVacationTimes[legacyVacationTimeKey]
                         || {};
                     const vacationData = workerVacationTimes[dateString];
-                    
+
                     if (vacationData) {
                         if (vacationData.morning) {
                             morningVacationCount++;
@@ -2027,45 +2241,45 @@
                         }
                     }
                 }
-                
+
                 // 6. 計算可用的工讀生人數
                 const availableMorningWorkers = totalWorkers - morningVacationCount - 1; // -1 是當前用戶
                 const availableEveningWorkers = totalWorkers - eveningVacationCount - 1;
-                
+
                 // 7. 判斷是否允許休假
                 if (requestMorning && requiredMorningWorkers > 0) {
                     if (availableMorningWorkers < requiredMorningWorkers) {
-                        return { 
-                            allowed: false, 
-                            message: `當日早上工讀生已休滿，需要至少${requiredMorningWorkers}位工讀生上早班` 
+                        return {
+                            allowed: false,
+                            message: `當日早上工讀生已休滿，需要至少${requiredMorningWorkers}位工讀生上早班`
                         };
                     }
                 }
-                
+
                 if (requestEvening && requiredEveningWorkers > 0) {
                     if (availableEveningWorkers < requiredEveningWorkers) {
-                        return { 
-                            allowed: false, 
-                            message: `當日晚上工讀生已休滿，需要至少${requiredEveningWorkers}位工讀生上晚班` 
+                        return {
+                            allowed: false,
+                            message: `當日晚上工讀生已休滿，需要至少${requiredEveningWorkers}位工讀生上晚班`
                         };
                     }
                 }
-                
+
                 return { allowed: true };
             }
 
             // 檢查工人是否可以在特定時間工作
             isWorkerAvailableForShift(worker, dateString, shift, workerVacationTimes) {
                 const workerVacationData = workerVacationTimes[worker.username]?.[dateString];
-                
+
                 if (!workerVacationData) {
                     // 沒有休假記錄，可以工作
                     return true;
                 }
-                
+
                 const morningShifts = ["早櫃", "早班"];
                 const eveningShifts = ["晚櫃", "晚班", "洗碗", "收班"];
-                
+
                 if (morningShifts.includes(shift)) {
                     // 早上班次，檢查是否早上休假
                     return !workerVacationData.morning;
@@ -2073,42 +2287,42 @@
                     // 晚上班次，檢查是否晚上休假
                     return !workerVacationData.evening;
                 }
-                
+
                 return true;
             }
-            
+
             // 外場排班系統 (Generator)
             async generateOutsideSchedule(year, month, startDay = 1, endDay = null) {
                 const allUsers = this.scheduleManager.getAllUsers();
                 const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, userAvailability = {}, outsideSchedule = {} } = allData;
-                
+
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
-                
+
                 // 獲取勾選框狀態，只排有勾選的工讀生
                 const availableWorkers = outsideWorkers.filter(worker => {
                     const checkbox = document.getElementById(`worker-${worker.id}`);
                     return checkbox ? checkbox.checked : true;
                 });
-                
+
                 if (availableWorkers.length === 0) {
                     this.uiManager.showToast('沒有外場工讀生可以排班');
                     return;
                 }
-                
+
                 const lastDayOfMonth = new Date(year, month, 0).getDate();
                 const actualEndDay = endDay || lastDayOfMonth;
-                
+
                 // 複製舊排班資料，但清空即將生成的日期範圍
                 const newSchedule = { ...outsideSchedule };
-                
+
                 // 清除指定日期範圍的舊排班數據
                 for (let day = startDay; day <= actualEndDay; day++) {
                     const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     delete newSchedule[dateString];
                 }
-                
+
                 // 獲取櫃檯休假日期
                 const counterVacations = [];
                 counterStaff.forEach(staff => {
@@ -2118,7 +2332,7 @@
                         counterVacations.push({ date, staff: staff.username });
                     });
                 });
-                
+
                 // 獲取工讀生不可上班日期和分時段休假
                 const workerUnavailability = {};
                 const workerVacationTimes = {};
@@ -2128,44 +2342,44 @@
                     const vacationTimeKey = `${worker.id}-${year}-${numericMonth}`;
                     const legacyVacationTimeKey = `${worker.id}-${year}-${String(numericMonth).padStart(2, '0')}`;
                     workerUnavailability[worker.username] = userAvailability[availabilityKey] || [];
-                    workerVacationTimes[worker.username] = allData.userVacationTimes?.[vacationTimeKey] 
-                        || allData.userVacationTimes?.[legacyVacationTimeKey] 
+                    workerVacationTimes[worker.username] = allData.userVacationTimes?.[vacationTimeKey]
+                        || allData.userVacationTimes?.[legacyVacationTimeKey]
                         || {};
                 });
-                
+
                 // 計算每個工讀生的工作天數
                 const workerWorkDays = {};
                 availableWorkers.forEach(worker => {
                     workerWorkDays[worker.username] = 0;
                 });
-                
+
                 for (let day = startDay; day <= actualEndDay; day++) {
                     const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     const date = new Date(year, month - 1, day);
                     const dayOfWeek = date.getDay();
-                    
+
                     // 跳過星期四（公休日）
                     if (dayOfWeek === 4) continue;
-                    
+
                     // 檢查是否有櫃檯休假
                     const counterVacation = counterVacations.find(cv => cv.date === dateString);
-                    
+
                     // 使用統一的排班邏輯
                     const daySchedule = this.generateDaySchedule(
-                        dateString, 
-                        dayOfWeek, 
-                        counterVacation, 
-                        availableWorkers, 
-                        workerUnavailability, 
-                        workerVacationTimes, 
+                        dateString,
+                        dayOfWeek,
+                        counterVacation,
+                        availableWorkers,
+                        workerUnavailability,
+                        workerVacationTimes,
                         workerWorkDays
                     );
-                    
+
                     if (daySchedule.length > 0) {
                         newSchedule[dateString] = daySchedule;
                     }
                 }
-                
+
                 // 更新排班資料
                 await this.scheduleManager.updateOutsideSchedule(newSchedule);
             }
@@ -2175,15 +2389,15 @@
                 // 防止預設行為和事件冒泡
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 const button = e.target;
                 const shiftId = button.dataset.id;
                 const allData = this.scheduleManager.getAllData();
                 const { coverSignups: currentCoverSignups = {} } = allData;
-                
+
                 if (button.classList.contains('signup-cover-btn')) {
                     if (currentCoverSignups[shiftId]) return this.uiManager.showToast('此班次已被預約！');
-                    
+
                     try {
                         await this.scheduleManager.updateCoverSignups({ ...currentCoverSignups, [shiftId]: this.authManager.getCurrentUser().uid });
                         this.uiManager.showToast('成功預約代班！');
@@ -2196,10 +2410,10 @@
                         try {
                             const newCoverSignups = { ...currentCoverSignups };
                             delete newCoverSignups[shiftId];
-                            
+
                             console.log('取消代班前:', currentCoverSignups);
                             console.log('取消代班後:', newCoverSignups);
-                            
+
                             await this.scheduleManager.updateCoverSignups(newCoverSignups);
                             this.uiManager.showToast('已取消代班。');
                         } catch (error) {
@@ -2233,12 +2447,12 @@
 
                 const allData = this.scheduleManager.getAllData();
                 const { manualAssignments = {} } = allData;
-                
+
                 const dayAssignmentsData = manualAssignments[date] || {};
-                const dayAssignments = Array.isArray(dayAssignmentsData) 
-                    ? dayAssignmentsData 
+                const dayAssignments = Array.isArray(dayAssignmentsData)
+                    ? dayAssignmentsData
                     : Object.values(dayAssignmentsData);
-                
+
                 const newAssignment = { username, assignedShift };
                 const newDayAssignments = [...dayAssignments, newAssignment];
                 const newManualAssignments = { ...manualAssignments, [date]: newDayAssignments };
@@ -2251,7 +2465,7 @@
             // 刪除手動排班
             async handleDeleteManualAssignment(dateString, username, assignedShift) {
                 console.log('開始刪除手動排班:', { dateString, username, assignedShift });
-                
+
                 if (this.authManager.getCurrentUserData()?.role !== this.ADMIN_ROLE) {
                     this.uiManager.showToast('僅管理者可刪除此班次。');
                     return;
@@ -2259,46 +2473,46 @@
 
                 const allData = this.scheduleManager.getAllData();
                 const { manualAssignments = {}, userAvailability = {}, userVacations = {}, coverSignups = {} } = allData;
-                
+
                 if (!manualAssignments[dateString]) {
                     this.uiManager.showToast('該日期沒有手動排班資料。');
                     return;
                 }
 
                 const dayAssignmentsData = manualAssignments[dateString] || {};
-                const dayAssignments = Array.isArray(dayAssignmentsData) 
-                    ? dayAssignmentsData 
+                const dayAssignments = Array.isArray(dayAssignmentsData)
+                    ? dayAssignmentsData
                     : Object.values(dayAssignmentsData);
-                
+
                 // 改進匹配邏輯：處理「收班」的不同變體和精確匹配
                 const targetIndex = dayAssignments.findIndex(a => {
                     if (a.username !== username) return false;
-                    
+
                     // 精確匹配
                     if (a.assignedShift === assignedShift) {
                         return true;
                     }
-                    
+
                     // 處理「收班」的不同變體
                     const shiftVariants = ['收班', '收班（內場）', '收班（外場）'];
                     const isClosingShift = shiftVariants.includes(a.assignedShift) && shiftVariants.includes(assignedShift);
                     if (isClosingShift) {
                         return true;
                     }
-                    
+
                     return false;
                 });
-                
+
                 if (targetIndex === -1) {
                     this.uiManager.showToast('找不到匹配的排班記錄。');
                     return;
                 }
-                
+
                 // 複製並移除該筆資料
                 const newManualAssignments = { ...manualAssignments };
                 const updatedDayAssignments = [...dayAssignments];
-                updatedDayAssignments.splice(targetIndex, 1); 
-                
+                updatedDayAssignments.splice(targetIndex, 1);
+
                 newManualAssignments[dateString] = updatedDayAssignments;
 
                 // --- 以下為連動清理邏輯 ---
@@ -2307,7 +2521,7 @@
 
                 const [yearStr, monthStr] = dateString.split('-');
                 const year = parseInt(yearStr, 10);
-                const month = parseInt(monthStr, 10); 
+                const month = parseInt(monthStr, 10);
 
                 let newUserAvailability = { ...userAvailability };
                 let newUserVacations = { ...userVacations };
@@ -2315,12 +2529,12 @@
                 let newCoverSignups = { ...currentCoverSignups };
 
                 if (targetUser) {
-                    if (targetUser.role === this.PART_TIMER_ROLE || targetUser.role === "外場工讀生") { 
+                    if (targetUser.role === this.PART_TIMER_ROLE || targetUser.role === "外場工讀生") {
                         const availabilityKey = `${targetUser.id}-${year}-${month}`;
                         const currentAvail = newUserAvailability[availabilityKey] || [];
                         const filteredAvail = currentAvail.filter(d => d !== dateString);
                         newUserAvailability[availabilityKey] = filteredAvail;
-                        
+
                         // 清理代班
                         const coverKeysToDelete = [];
                         Object.keys(newCoverSignups).forEach(signupId => {
@@ -2333,7 +2547,7 @@
                             }
                         });
                         coverKeysToDelete.forEach(key => delete newCoverSignups[key]);
-                        
+
                     } else if (this.FULLTIME_ROLES.includes(targetUser.role) || targetUser.role === "外場櫃檯") {
                         const vacationKey = `${targetUser.id}-${year}-${month}`;
                         const currentVac = newUserVacations[vacationKey] || [];
@@ -2342,7 +2556,7 @@
                         }
                     }
                 }
-                
+
                 try {
                     await this.scheduleManager.updateMultiple({
                         manualAssignments: newManualAssignments,
@@ -2350,7 +2564,7 @@
                         userVacations: newUserVacations,
                         coverSignups: newCoverSignups
                     });
-                    
+
                     // 重新渲染月曆
                     if (this.authManager.getCurrentUserData()?.role === this.ADMIN_ROLE) {
                         if (this.currentCalendarView === 'inside') {
@@ -2366,11 +2580,329 @@
                 }
             }
 
+            // 管理員設為公休
+            async handleAdminSetHoliday() {
+                if (!this.pendingAdminActionDate) return;
+
+                const allData = this.scheduleManager.getAllData();
+                const { adminHolidays: currentAdminHolidays = [] } = allData;
+                const newAdminHolidays = [...currentAdminHolidays, this.pendingAdminActionDate];
+
+                await this.scheduleManager.updateAdminHolidays(newAdminHolidays);
+                this.uiManager.showToast(`${this.pendingAdminActionDate} 已設定為公休日。`);
+                this.uiManager.hideAdminActionModal();
+                this.pendingAdminActionDate = null;
+            }
+
+            // 管理員點擊更換人員
+            handleAdminSwapStaffClick() {
+                if (!this.pendingAdminActionDate) return;
+                this.uiManager.hideAdminActionModal();
+
+                const dateString = this.pendingAdminActionDate;
+                const allData = this.scheduleManager.getAllData();
+                const allUsers = this.scheduleManager.getAllUsers();
+
+                let currentStaff = [];
+                let replacementCandidates = [];
+
+                if (this.currentCalendarView === 'outside') {
+                    const { outsideSchedule = {}, manualAssignments = {}, userVacations = {} } = allData;
+
+                    // 自動排班的人員
+                    const daySchedule = outsideSchedule[dateString] || [];
+                    const dayArray = Array.isArray(daySchedule) ? daySchedule : Object.values(daySchedule);
+                    dayArray.forEach((entry, index) => {
+                        currentStaff.push({
+                            username: entry.username,
+                            shift: entry.shift || entry.assignedShift || '未知',
+                            role: entry.role || '外場工讀生',
+                            source: 'outsideSchedule',
+                            index: index
+                        });
+                    });
+
+                    // 手動排班的外場人員
+                    const manualDay = manualAssignments[dateString] || [];
+                    const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                    manualArray.forEach((entry, index) => {
+                        const shift = entry.assignedShift;
+                        if (this.outsideShifts.includes(shift) || shift === '收班（外場）') {
+                            currentStaff.push({
+                                username: entry.username,
+                                shift: shift,
+                                role: '外場 (手動)',
+                                source: 'manualAssignment',
+                                index: index
+                            });
+                        }
+                    });
+
+                    // 櫃檯人員 (非休假日)
+                    const counterStaff = allUsers.filter(u => u.role === '外場櫃檯');
+                    counterStaff.forEach(staff => {
+                        const alreadyListed = currentStaff.some(s => s.username === staff.username);
+                        if (!alreadyListed) {
+                            const [y, mo] = dateString.split('-').map(Number);
+                            const vacKey = `${staff.id}-${y}-${mo}`;
+                            const vacations = (allData.userVacations || {})[vacKey] || [];
+                            const d = new Date(y, mo - 1, parseInt(dateString.split('-')[2]));
+                            if (d.getDay() !== 4 && !vacations.includes(dateString)) {
+                                currentStaff.push({
+                                    username: staff.username,
+                                    shift: '櫃檯',
+                                    role: '外場櫃檯',
+                                    source: 'counter',
+                                    userId: staff.id
+                                });
+                            }
+                        }
+                    });
+
+                    replacementCandidates = allUsers.filter(u =>
+                        u.role === '外場工讀生' || u.role === '外場櫃檯'
+                    );
+
+                } else {
+                    // 內場視圖
+                    const { userVacations = {}, coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
+                    const [y, mo] = dateString.split('-').map(Number);
+
+                    // 正職人員 (非休假日)
+                    allUsers.filter(u => this.FULLTIME_ROLES.includes(u.role)).forEach(user => {
+                        const vacKey = `${user.id}-${y}-${mo}`;
+                        const vacations = userVacations[vacKey] || [];
+                        if (!vacations.includes(dateString)) {
+                            currentStaff.push({
+                                username: user.username,
+                                shift: user.role === '内場備菜班' ? '備菜班' : '炸爐班',
+                                role: user.role,
+                                source: 'fullTimer',
+                                userId: user.id
+                            });
+                        }
+                    });
+
+                    // 工讀生 (有標記可上班)
+                    allUsers.filter(u => u.role === this.PART_TIMER_ROLE).forEach(user => {
+                        const availKey = `${user.id}-${y}-${mo}`;
+                        const avail = userAvailability[availKey] || [];
+                        if (avail.includes(dateString)) {
+                            currentStaff.push({
+                                username: user.username,
+                                shift: '收班',
+                                role: this.PART_TIMER_ROLE,
+                                source: 'partTimer',
+                                userId: user.id
+                            });
+                        }
+                    });
+
+                    // 代班人員
+                    Object.keys(coverSignups).forEach(coverId => {
+                        const parts = coverId.split('-');
+                        if (parts.length < 5) return;
+                        const coverDate = parts.slice(parts.length - 4, parts.length - 1).join('-');
+                        if (coverDate !== dateString) return;
+
+                        const ptUserId = coverSignups[coverId];
+                        const ptUser = allUsers.find(u => u.id === ptUserId);
+                        const timeSlot = parts[parts.length - 1];
+
+                        if (ptUser) {
+                            currentStaff.push({
+                                username: ptUser.username,
+                                shift: `代班(${timeSlot === 'AM' ? '早' : '晚'})`,
+                                role: '代班',
+                                source: 'coverSignup',
+                                coverId: coverId
+                            });
+                        }
+                    });
+
+                    // 手動排班的內場人員
+                    const manualDay = manualAssignments[dateString] || [];
+                    const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                    manualArray.forEach((entry, index) => {
+                        const shift = entry.assignedShift;
+                        if (this.insideShifts.includes(shift) || shift === '收班（內場）') {
+                            currentStaff.push({
+                                username: entry.username,
+                                shift: shift,
+                                role: '内場 (手動)',
+                                source: 'manualAssignment',
+                                index: index
+                            });
+                        }
+                    });
+
+                    replacementCandidates = allUsers.filter(u =>
+                        this.INSIDE_ROLES.includes(u.role)
+                    );
+                }
+
+                if (currentStaff.length === 0) {
+                    this.uiManager.showToast('當天沒有排班人員可更換');
+                    return;
+                }
+
+                this.pendingSwapData = { dateString, currentStaff };
+                this.uiManager.showAdminSwapModal(dateString, currentStaff, replacementCandidates);
+            }
+
+            // 確認更換人員
+            async confirmAdminSwap() {
+                if (!this.pendingSwapData) return;
+
+                const { dateString, currentStaff } = this.pendingSwapData;
+                const swapSelects = document.querySelectorAll('.admin-swap-select');
+                const allData = this.scheduleManager.getAllData();
+
+                let hasChanges = false;
+                const changes = [];
+
+                swapSelects.forEach((select, i) => {
+                    const staff = currentStaff[i];
+                    const newUsername = select.value;
+                    if (newUsername && newUsername !== staff.username) {
+                        changes.push({ staff, newUsername });
+                        hasChanges = true;
+                    }
+                });
+
+                if (!hasChanges) {
+                    this.uiManager.showToast('沒有更換任何人員');
+                    this.uiManager.hideAdminSwapModal();
+                    return;
+                }
+
+                try {
+                    if (this.currentCalendarView === 'outside') {
+                        const newOutsideSchedule = deepClone(allData.outsideSchedule || {});
+                        const newManualAssignments = deepClone(allData.manualAssignments || {});
+                        const newUserVacations = deepClone(allData.userVacations || {});
+
+                        for (const change of changes) {
+                            if (change.staff.source === 'outsideSchedule') {
+                                const daySchedule = newOutsideSchedule[dateString] || [];
+                                const dayArray = Array.isArray(daySchedule) ? daySchedule : Object.values(daySchedule);
+                                if (dayArray[change.staff.index]) {
+                                    dayArray[change.staff.index].username = change.newUsername;
+                                    newOutsideSchedule[dateString] = dayArray;
+                                }
+                            } else if (change.staff.source === 'manualAssignment') {
+                                const manualDay = newManualAssignments[dateString] || [];
+                                const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                                if (manualArray[change.staff.index]) {
+                                    manualArray[change.staff.index].username = change.newUsername;
+                                    newManualAssignments[dateString] = manualArray;
+                                }
+                            } else if (change.staff.source === 'counter') {
+                                // 櫃檯人員更換：原人設為休假 + 新增手動排班
+                                const [y, mo] = dateString.split('-').map(Number);
+                                const vacKey = `${change.staff.userId}-${y}-${mo}`;
+                                const currentVac = newUserVacations[vacKey] || [];
+                                if (!currentVac.includes(dateString)) {
+                                    newUserVacations[vacKey] = [...currentVac, dateString];
+                                }
+                                const manualDay = newManualAssignments[dateString] || [];
+                                const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                                manualArray.push({
+                                    username: change.newUsername,
+                                    assignedShift: '櫃檯'
+                                });
+                                newManualAssignments[dateString] = manualArray;
+                            }
+                        }
+
+                        await this.scheduleManager.updateMultiple({
+                            outsideSchedule: newOutsideSchedule,
+                            manualAssignments: newManualAssignments,
+                            userVacations: newUserVacations
+                        });
+
+                    } else {
+                        // 內場視圖
+                        const newManualAssignments = deepClone(allData.manualAssignments || {});
+                        const newUserVacations = deepClone(allData.userVacations || {});
+                        const newUserAvailability = deepClone(allData.userAvailability || {});
+                        const [y, mo] = dateString.split('-').map(Number);
+
+                        for (const change of changes) {
+                            if (change.staff.source === 'manualAssignment') {
+                                const manualDay = newManualAssignments[dateString] || [];
+                                const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                                if (manualArray[change.staff.index]) {
+                                    manualArray[change.staff.index].username = change.newUsername;
+                                    newManualAssignments[dateString] = manualArray;
+                                }
+                            } else if (change.staff.source === 'fullTimer') {
+                                // 正職人員更換：原人設為休假 + 新增手動排班給替換者
+                                const vacKey = `${change.staff.userId}-${y}-${mo}`;
+                                const currentVac = newUserVacations[vacKey] || [];
+                                if (!currentVac.includes(dateString)) {
+                                    newUserVacations[vacKey] = [...currentVac, dateString];
+                                }
+                                const manualDay = newManualAssignments[dateString] || [];
+                                const manualArray = Array.isArray(manualDay) ? manualDay : Object.values(manualDay);
+                                let assignedShift = '';
+                                if (change.staff.shift === '備菜班') assignedShift = '備菜班 (全日)';
+                                else if (change.staff.shift === '炸爐班') assignedShift = '炸爐班 (全日)';
+                                else assignedShift = change.staff.shift;
+                                manualArray.push({
+                                    username: change.newUsername,
+                                    assignedShift: assignedShift
+                                });
+                                newManualAssignments[dateString] = manualArray;
+                            } else if (change.staff.source === 'partTimer') {
+                                // 工讀生更換：移除原人可上班標記 + 新增替換者可上班標記
+                                const origAvailKey = `${change.staff.userId}-${y}-${mo}`;
+                                const origAvail = newUserAvailability[origAvailKey] || [];
+                                newUserAvailability[origAvailKey] = origAvail.filter(d => d !== dateString);
+
+                                const swapAllUsers = this.scheduleManager.getAllUsers();
+                                const newUser = swapAllUsers.find(u => u.username === change.newUsername);
+                                if (newUser) {
+                                    const newAvailKey = `${newUser.id}-${y}-${mo}`;
+                                    const newAvail = newUserAvailability[newAvailKey] || [];
+                                    if (!newAvail.includes(dateString)) {
+                                        newUserAvailability[newAvailKey] = [...newAvail, dateString];
+                                    }
+                                }
+                            }
+                        }
+
+                        await this.scheduleManager.updateMultiple({
+                            manualAssignments: newManualAssignments,
+                            userVacations: newUserVacations,
+                            userAvailability: newUserAvailability
+                        });
+                    }
+
+                    this.uiManager.showToast('人員更換成功！');
+                    this.uiManager.hideAdminSwapModal();
+                    this.pendingSwapData = null;
+                    this.pendingAdminActionDate = null;
+
+                    // 重新渲染月曆
+                    this.clearCalendarCache();
+                    if (this.currentCalendarView === 'inside') {
+                        await this.renderFullCalendar();
+                    } else {
+                        await this.renderOutsideCalendar();
+                    }
+
+                } catch (error) {
+                    console.error('更換人員失敗:', error);
+                    this.uiManager.showToast(`更換人員失敗：${error.message}`);
+                }
+            }
+
             // 主渲染邏輯
             renderAppView() {
                 const currentUserData = this.authManager.getCurrentUserData();
-                if(!currentUserData) return;
-                
+                if (!currentUserData) return;
+
                 if (currentUserData.role !== this.ADMIN_ROLE) {
                     this.uiManager.toggleSettingsButton(true);
                 } else {
@@ -2407,22 +2939,22 @@
                 const year = this.calendarManager.getYear();
                 const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, adminHolidays = [], coverSignups = {} } = allData;
-                
+
                 let availableCoverShifts = [];
                 const allUsers = this.scheduleManager.getAllUsers();
                 const fullTimeUsers = allUsers.filter(u => this.FULLTIME_ROLES.includes(u.role));
-                
+
                 fullTimeUsers.forEach(user => {
-                    const vacationKey = `${user.id}-${year}-${month+1}`;
+                    const vacationKey = `${user.id}-${year}-${month + 1}`;
                     const monthlyVacations = userVacations[vacationKey] || [];
                     monthlyVacations.forEach(dateString => {
                         const vacationDate = new Date(...dateString.split('-').map((n, i) => i === 1 ? n - 1 : n));
                         if (vacationDate.getDay() === 4 || adminHolidays.includes(dateString)) return;
 
-                        const slots = (user.role === '内場備菜班') 
+                        const slots = (user.role === '内場備菜班')
                             ? [{ key: 'AM', time: '10:00 - 14:00' }, { key: 'PM', time: '16:30 - 20:00' }]
                             : [{ key: 'AM', time: '10:30 - 14:00' }, { key: 'PM', time: '17:00 - 21:00' }];
-                        
+
                         slots.forEach(slot => {
                             availableCoverShifts.push({
                                 id: `cover-${user.id}-${dateString}-${slot.key}`,
@@ -2434,7 +2966,7 @@
                         });
                     });
                 });
-                
+
                 availableCoverShifts.sort((a, b) => {
                     const roleOrder = { '内場備菜班': 1, '内場炸爐班': 2 };
                     if (roleOrder[a.fullTimerRole] !== roleOrder[b.fullTimerRole]) {
@@ -2473,7 +3005,7 @@
                         const isTakenByOther = coverSignups[shift.id] && !isSignedUpByCurrentUser;
                         const card = document.createElement('div');
                         card.className = 'bg-white p-3 rounded-md shadow-sm border-l-4';
-                        
+
                         let buttonHtml;
                         if (isSignedUpByCurrentUser) {
                             card.classList.add('border-green-500');
@@ -2498,10 +3030,10 @@
                         coverShiftsList.appendChild(card);
                     });
                 }
-                
+
                 await this.renderFullCalendar();
             }
-            
+
             // 管理員視圖
             async renderAdminView() {
                 this.uiManager.calendarView.innerHTML = `
@@ -2579,29 +3111,29 @@
                         <p class="text-center text-sm text-gray-500 mt-4">點擊日期以設定或取消該日為全體公休日。</p>
                     </div>
                 `;
-                
+
                 // 設置切換按鈕事件
                 document.getElementById('inside-calendar-btn').addEventListener('click', () => {
                     this.currentCalendarView = 'inside';
                     this.updateCalendarToggleButtons(); // Will update dropdown
                     this.renderFullCalendar();
                 });
-                
+
                 document.getElementById('outside-calendar-btn').addEventListener('click', () => {
                     this.currentCalendarView = 'outside';
                     this.updateCalendarToggleButtons(); // Will update dropdown
                     this.renderOutsideCalendar();
                 });
-                
+
                 document.getElementById('generate-outside-schedule-btn').addEventListener('click', async () => {
                     // 使用台灣當前的實際日期，而不是月曆顯示的月份
                     const today = new Date();
                     const currentDay = today.getDate();
                     const currentMonth = today.getMonth() + 1; // 1-12
                     const currentYear = today.getFullYear();
-                    
+
                     let targetYear, targetMonth;
-                    
+
                     if (currentDay >= 25) {
                         // 25號之後：排下個月1-15號
                         targetMonth = currentMonth === 12 ? 1 : currentMonth + 1;
@@ -2621,21 +3153,21 @@
                         await this.generateOutsideSchedule(targetYear, targetMonth);
                         this.uiManager.showToast(`已排${targetYear}年${targetMonth}月整月的班表`);
                     }
-                    
+
                     // 切換月曆到排好班的月份
                     this.calendarManager.setCalendarDate(new Date(targetYear, targetMonth - 1, 1));
-                    
+
                     // 切換到外場月曆視圖並更新按鈕樣式
                     this.currentCalendarView = 'outside';
                     this.updateCalendarToggleButtons();
                     this.renderOutsideCalendar();
                 });
-                
+
                 // 用戶管理面板折叠/展开
                 document.getElementById('user-management-toggle').addEventListener('click', () => {
                     const content = document.getElementById('user-management-content');
                     const icon = document.getElementById('user-management-icon');
-                    
+
                     if (content.classList.contains('hidden')) {
                         content.classList.remove('hidden');
                         icon.textContent = 'expand_less';
@@ -2646,12 +3178,12 @@
                         icon.style.transform = 'rotate(0deg)';
                     }
                 });
-                
+
                 // 外場排班管理面板折叠/展开
                 document.getElementById('outside-schedule-toggle').addEventListener('click', () => {
                     const content = document.getElementById('outside-schedule-content');
                     const icon = document.getElementById('outside-schedule-icon');
-                    
+
                     if (content.classList.contains('hidden')) {
                         content.classList.remove('hidden');
                         icon.textContent = 'expand_less';
@@ -2662,12 +3194,12 @@
                         icon.style.transform = 'rotate(0deg)';
                     }
                 });
-                
+
                 // 手動新增排班面板折叠/展开
                 document.getElementById('manual-assignment-toggle').addEventListener('click', () => {
                     const content = document.getElementById('manual-assignment-content');
                     const icon = document.getElementById('manual-assignment-icon');
-                    
+
                     if (content.classList.contains('hidden')) {
                         content.classList.remove('hidden');
                         icon.textContent = 'expand_less';
@@ -2678,15 +3210,15 @@
                         icon.style.transform = 'rotate(0deg)';
                     }
                 });
-                
+
                 // 初始化為內場月曆
                 this.currentCalendarView = 'inside';
                 this.updateCalendarToggleButtons(); // Initial dropdown population
                 await this.renderFullCalendar();
-                
+
                 // 生成工讀生勾選框
                 this.generateWorkerCheckboxes();
-                
+
                 // 生成用戶管理列表
                 this.generateUserManagementLists();
             }
@@ -2697,7 +3229,7 @@
                 const outsideBtn = document.getElementById('outside-calendar-btn');
                 const assignmentRoleSelect = document.getElementById('assignment-role');
                 const outsideSchedulePanel = document.getElementById('outside-schedule-panel');
-                
+
                 // Clear existing options except the first disabled one
                 assignmentRoleSelect.innerHTML = '<option value="" disabled selected>選擇班別</option>';
 
@@ -2722,7 +3254,7 @@
                     if (shift === '收班') {
                         return; // 跳過，避免重複
                     }
-                    
+
                     const option = document.createElement('option');
                     option.value = shift;
                     option.textContent = shift;
@@ -2739,27 +3271,27 @@
             generateWorkerCheckboxes() {
                 const workerCheckboxesContainer = document.getElementById('worker-checkboxes');
                 if (!workerCheckboxesContainer) return;
-                
+
                 const allUsers = this.scheduleManager.getAllUsers();
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
-                
+
                 workerCheckboxesContainer.innerHTML = '';
-                
+
                 outsideWorkers.forEach(worker => {
                     const checkboxDiv = document.createElement('div');
                     checkboxDiv.className = 'flex items-center space-x-2 p-2 bg-white rounded border';
-                    
+
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.id = `worker-${worker.id}`;
                     checkbox.className = 'rounded border-gray-300 text-green-600 focus:ring-green-500';
                     checkbox.checked = true; // 預設為可上班
-                    
+
                     const label = document.createElement('label');
                     label.htmlFor = `worker-${worker.id}`;
                     label.className = 'text-sm font-medium text-gray-700';
                     label.textContent = worker.username;
-                    
+
                     checkboxDiv.appendChild(checkbox);
                     checkboxDiv.appendChild(label);
                     workerCheckboxesContainer.appendChild(checkboxDiv);
@@ -2771,7 +3303,7 @@
                 const allUsers = this.scheduleManager.getAllUsers();
                 const insideWorkers = allUsers.filter(u => u.role === "内場工讀生");
                 const outsideWorkers = allUsers.filter(u => u.role === "外場工讀生");
-                
+
                 // 生成內場工讀生列表
                 const insideWorkersList = document.getElementById('inside-workers-list');
                 const insideSection = insideWorkersList ? insideWorkersList.parentElement : null;
@@ -2802,7 +3334,7 @@
                         });
                     }
                 }
-                
+
                 // 生成外場工讀生列表
                 const outsideWorkersList = document.getElementById('outside-workers-list');
                 const outsideSection = outsideWorkersList ? outsideWorkersList.parentElement : null;
@@ -2860,17 +3392,17 @@
                         <p class="text-center text-sm text-gray-500 mt-4"></p>
                     </div>
                 `;
-                 const instructions = this.uiManager.calendarView.querySelector('p');
-                 instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。"; // Simplified for non-admin
-                 await this.renderFullCalendar();
+                const instructions = this.uiManager.calendarView.querySelector('p');
+                instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。"; // Simplified for non-admin
+                await this.renderFullCalendar();
             }
 
             // 外場人員視圖
             async renderOutsideView() {
                 const currentUserData = this.authManager.getCurrentUserData();
                 const isWorker = currentUserData.role === "外場工讀生";
-                
-                 this.uiManager.calendarView.innerHTML = `
+
+                this.uiManager.calendarView.innerHTML = `
                     <div>
                         <div id="calendar-header" class="flex items-center justify-between mb-4">
                             <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200"><span class="material-icons-outlined">chevron_left</span></button>
@@ -2911,14 +3443,14 @@
                         ` : ''}
                     </div>
                 `;
-                
+
                 const instructions = this.uiManager.calendarView.querySelector('p');
                 if (currentUserData.role === "外場櫃檯") {
                     instructions.textContent = "請點擊日期選擇您的休假日 (每月最多5天)。";
                 } else {
                     instructions.textContent = "請點擊日期標示您不能上班的日子 / 點擊已排班日期找人代班。"; // Updated instruction
                 }
-                
+
                 await this.renderOutsideCalendar();
             }
 
@@ -2928,9 +3460,9 @@
                 this.calendarManager.getCalendarDate().setDate(1);
                 const month = this.calendarManager.getMonth();
                 const year = this.calendarManager.getYear();
-                
+
                 document.getElementById('calendar-month-year').textContent = `${year}年 ${month + 1}月`;
-                
+
                 const holidays = await this.calendarManager.fetchHolidays(year);
                 const allData = this.scheduleManager.getAllData();
                 const { userVacations = {}, adminHolidays = [], coverSignups = {}, userAvailability = {}, manualAssignments = {} } = allData;
@@ -2945,7 +3477,7 @@
 
                 const allUsers = this.scheduleManager.getAllUsers();
                 allUsers.filter(u => this.FULLTIME_ROLES.includes(u.role)).forEach(user => {
-                    const userMonthKey = `${user.id}-${year}-${month+1}`;
+                    const userMonthKey = `${user.id}-${year}-${month + 1}`;
                     const monthlyVacations = userVacations[userMonthKey] || [];
                     for (let i = 1; i <= lastDayOfMonth; i++) {
                         const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -2963,19 +3495,19 @@
                     const date = new Date(dateString);
 
                     if (date.getFullYear() === year && date.getMonth() === month) {
-                         const ptUserId = coverSignups[coverId];
-                         const ptUser = allUsers.find(u => u.id === ptUserId);
-                         const fullTimerId = parts.slice(1, parts.length - 4).join('-');
-                         const originalFullTimer = allUsers.find(u => u.id === fullTimerId);
+                        const ptUserId = coverSignups[coverId];
+                        const ptUser = allUsers.find(u => u.id === ptUserId);
+                        const fullTimerId = parts.slice(1, parts.length - 4).join('-');
+                        const originalFullTimer = allUsers.find(u => u.id === fullTimerId);
 
-                         if(ptUser && originalFullTimer) {
+                        if (ptUser && originalFullTimer) {
                             dailySchedule[dateString].push({ username: ptUser.username, role: originalFullTimer.role, isCover: true, timeSlot });
-                         }
+                        }
                     }
                 });
-                
+
                 allUsers.filter(u => u.role === this.PART_TIMER_ROLE).forEach(user => {
-                    const userMonthKey = `${user.id}-${year}-${month+1}`;
+                    const userMonthKey = `${user.id}-${year}-${month + 1}`;
                     const monthlyAvailability = userAvailability[userMonthKey] || [];
                     monthlyAvailability.forEach(dateString => {
                         const alreadyScheduled = dailySchedule[dateString].some(s => s.username === user.username);
@@ -2992,15 +3524,15 @@
                     const assignmentsArray = Array.isArray(assignments) ? assignments : Object.values(assignments);
 
                     if (dailySchedule[dateString] && assignmentsArray.length > 0) {
-                         assignmentsArray.forEach(assignment => {
+                        assignmentsArray.forEach(assignment => {
                             // Check if this shift belongs to the inside view
                             const assignedShift = assignment.assignedShift;
-                            
+
                             // 內場月曆：只顯示內場的收班，不顯示外場的收班
                             if (assignedShift === '收班（外場）') {
                                 return; // 跳過外場的收班
                             }
-                            
+
                             if (this.insideShifts.includes(assignedShift)) {
                                 let role = '';
                                 let timeSlot = 'FullDay';
@@ -3012,9 +3544,9 @@
                                 if (assignedShift.includes('早')) timeSlot = 'AM';
                                 else if (assignedShift.includes('晚')) timeSlot = 'PM';
 
-                                dailySchedule[dateString].push({ 
-                                    username: assignment.username, 
-                                    role: role, 
+                                dailySchedule[dateString].push({
+                                    username: assignment.username,
+                                    role: role,
                                     isCover: true, // Treat as cover for simplicity in logic
                                     timeSlot: timeSlot,
                                     isManual: true,
@@ -3028,13 +3560,13 @@
 
 
                 const calendarGrid = document.getElementById('calendar-grid');
-                
+
                 // === 優化 1.5: 使用 DocumentFragment 批量 DOM 操作 (內場月曆) ===
                 const fragment = document.createDocumentFragment();
-                
+
                 const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
                 const prevLastDay = new Date(year, month, 0).getDate();
-                
+
                 // 添加上個月的日期佔位
                 for (let i = firstDayIndex; i > 0; i--) {
                     const emptyDay = document.createElement('div');
@@ -3045,7 +3577,7 @@
 
                 const todayString = new Date().toISOString().split('T')[0];
                 const currentUserData = this.authManager.getCurrentUserData();
-                
+
                 // === 優化: 預先計算 adminHolidays Set 加速查找 ===
                 const adminHolidaysSet = new Set(adminHolidays);
 
@@ -3062,7 +3594,7 @@
                     if (isThursday || isAdminHoliday) {
                         day.classList.add('bg-red-100');
                         day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800">${i}</span></div><div class="flex-grow flex items-center justify-center"><p class="font-bold text-red-700 text-xs sm:text-sm">公休日</p></div>`;
-                        if (currentUserData.role === this.ADMIN_ROLE && !isThursday) day.classList.add('cursor-pointer'); 
+                        if (currentUserData.role === this.ADMIN_ROLE && !isThursday) day.classList.add('cursor-pointer');
                     } else {
                         // === Inside Shift Shortage Check (Orange BG) ===
                         const workingUsers = dailySchedule[dateString] || [];
@@ -3071,38 +3603,38 @@
                         // Helper function to check for AM/PM/FullDay presence
                         const hasShift = (role, time) => {
                             if (time === 'FullDay') {
-                                return workingUsers.some(w => 
+                                return workingUsers.some(w =>
                                     (w.role === role && w.timeSlot === 'FullDay' && !w.isCover) || // Full-timer
                                     (w.isManual && w.assignedShift === `${role.replace('内場', '')} (全日)`)
                                 );
                             }
                             if (time === 'AM') {
-                                return workingUsers.some(w => 
+                                return workingUsers.some(w =>
                                     (w.role === role && w.isCover && w.timeSlot === 'AM' && !w.isManual) || // PT Cover (from vacation)
                                     (w.isManual && w.assignedShift === `${role.replace('内場', '')} (早)`)
                                 );
                             }
                             if (time === 'PM') {
-                                return workingUsers.some(w => 
+                                return workingUsers.some(w =>
                                     (w.role === role && w.isCover && w.timeSlot === 'PM' && !w.isManual) || // PT Cover (from vacation)
                                     (w.isManual && w.assignedShift === `${role.replace('内場', '')} (晚)`)
                                 );
                             }
                             return false;
                         };
-                        
+
                         // 1. Check 備菜班
                         const isBekaiCovered = hasShift('内場備菜班', 'FullDay') || (hasShift('内場備菜班', 'AM') && hasShift('内場備菜班', 'PM'));
-                        
+
                         // 2. Check 炸爐班
                         const isJaluCovered = hasShift('内場炸爐班', 'FullDay') || (hasShift('内場炸爐班', 'AM') && hasShift('内場炸爐班', 'PM'));
 
                         // 3. Check 收班 (PT availability or manual)
-                        const isShoubanCovered = workingUsers.some(w => 
+                        const isShoubanCovered = workingUsers.some(w =>
                             (w.role === this.PART_TIMER_ROLE && w.timeSlot === 'FullDay' && !w.isCover) || // From userAvailability
                             (w.isManual && (w.assignedShift === '收班' || w.assignedShift === '收班（內場）')) // Manual '收班' or '收班（內場）'
                         );
-                        
+
                         if (!(isBekaiCovered && isJaluCovered && isShoubanCovered)) {
                             isShortage = true;
                         }
@@ -3112,7 +3644,7 @@
                         } else if (holidayName) {
                             day.classList.add('bg-yellow-100');
                         }
-                        
+
                         // Make clickable for relevant roles
                         if (this.FULLTIME_ROLES.includes(currentUserData.role) || currentUserData.role === this.PART_TIMER_ROLE || currentUserData.role === this.ADMIN_ROLE) {
                             day.classList.add('cursor-pointer');
@@ -3120,9 +3652,9 @@
 
                         let usersHtml = '<div class="flex-grow"></div>';
                         if (workingUsers.length > 0) {
-                             const getSortOrder = (workInfo) => {
+                            const getSortOrder = (workInfo) => {
                                 const { role, isCover, timeSlot, isManual, assignedShift } = workInfo;
-                                
+
                                 // Handle manual shifts first
                                 if (isManual) {
                                     if (assignedShift.includes('備菜班 (早)')) return 1;
@@ -3154,12 +3686,12 @@
                                 const { username, role, isCover, timeSlot, isManual, assignedShift } = workInfo;
                                 let displayLabel = '';
                                 let colorClass = '';
-                                
+
                                 const originalUser = allUsers.find(u => u.username === username);
                                 const userRole = originalUser ? originalUser.role : (role === this.PART_TIMER_ROLE ? this.PART_TIMER_ROLE : null);
 
                                 if (userRole === this.PART_TIMER_ROLE || isManual) {
-                                     if (isManual) { // Handle manual assignment labels
+                                    if (isManual) { // Handle manual assignment labels
                                         if (assignedShift === '備菜班 (早)') displayLabel = '(早備)';
                                         else if (assignedShift === '備菜班 (晚)') displayLabel = '(晚備)';
                                         else if (assignedShift === '備菜班 (全日)') displayLabel = '(備)';
@@ -3177,13 +3709,13 @@
                                     if (role === '内場備菜班') displayLabel = '(備)';
                                     else if (role === '内場炸爐班') displayLabel = '(炸)';
                                 }
-                                
+
                                 // Assign color based on the final determined role/shift
                                 if (displayLabel.includes('備')) colorClass = 'font-semibold text-green-800';
                                 else if (displayLabel.includes('炸')) colorClass = 'font-semibold text-amber-800';
                                 else if (displayLabel.includes('收')) colorClass = 'font-semibold text-blue-800';
                                 else colorClass = 'text-gray-800'; // Default color
-                                
+
                                 const deleteButtonHtml = (currentUserData.role === this.ADMIN_ROLE && isManual)
                                     ? `<button data-date="${dateString}" data-username="${username}" data-shift="${assignedShift || ''}" class="delete-manual-assignment-btn text-red-400 hover:text-red-700 font-bold">&times;</button>`
                                     : '';
@@ -3196,23 +3728,23 @@
                             }).join('');
                             usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml}</div>`;
                         }
-                        
+
                         let selfStatusHtml = '';
                         if (currentUserData.role === this.ADMIN_ROLE) {
-                            if(!holidayName && !isShortage) day.classList.add('bg-gray-50');
+                            if (!holidayName && !isShortage) day.classList.add('bg-gray-50');
                         } else if (this.FULLTIME_ROLES.includes(currentUserData.role)) {
-                            const vacationKey = `${currentUserData.uid}-${year}-${month+1}`;
+                            const vacationKey = `${currentUserData.uid}-${year}-${month + 1}`;
                             const isVacation = (userVacations[vacationKey] || []).includes(dateString);
                             if (isVacation) {
                                 day.classList.add('bg-red-100', 'border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">休假</p>`;
                             } else {
-                                if(!holidayName && !isShortage) day.classList.add('bg-green-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-green-100');
                                 day.classList.add('border', 'border-green-400');
                                 selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
                         } else if (currentUserData.role === this.PART_TIMER_ROLE) {
-                            const availabilityKey = `${currentUserData.uid}-${year}-${month+1}`;
+                            const availabilityKey = `${currentUserData.uid}-${year}-${month + 1}`;
                             const isAvailable = (userAvailability[availabilityKey] || []).includes(dateString);
                             const isWorkingCoverShift = workingUsers.some(w => w.username === currentUserData.username && w.isCover && !w.isManual);
                             const isWorkingManual = workingUsers.some(w => w.username === currentUserData.username && w.isManual);
@@ -3220,26 +3752,26 @@
 
 
                             if (isWorkingCoverShift || isWorkingManual || isWorkingAvailability) { // If working (any type)
-                                if(!holidayName && !isShortage) day.classList.add('bg-blue-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-blue-100');
                                 day.classList.add('border', 'border-blue-400');
                                 selfStatusHtml = `<p class="font-bold text-blue-700">上班</p>`;
                             } else if (isAvailable) { // Available but not assigned cover/manual
-                                if(!holidayName && !isShortage) day.classList.add('bg-blue-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-blue-100');
                                 day.classList.add('border', 'border-blue-400');
                                 selfStatusHtml = `<p class="font-semibold text-blue-700">要上班</p>`;
                             } else { // Not available
-                                if(!holidayName && !isShortage) day.classList.add('bg-white');
+                                if (!holidayName && !isShortage) day.classList.add('bg-white');
                                 selfStatusHtml = `<p class="text-gray-400">休息</p>`;
                             }
                         }
 
                         day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
                     }
-                    
+
                     if (dateString === todayString) day.classList.add('today');
                     fragment.appendChild(day); // 添加到 fragment 而非直接操作 DOM
                 }
-                
+
                 // === 優化 1.5: 一次性更新 DOM ===
                 calendarGrid.innerHTML = '';
                 calendarGrid.appendChild(fragment);
@@ -3252,12 +3784,12 @@
                 this.calendarManager.getCalendarDate().setDate(1);
                 const month = this.calendarManager.getMonth();
                 const year = this.calendarManager.getYear();
-                
+
                 document.getElementById('calendar-month-year').textContent = `${year}年 ${month + 1}月`;
-                
+
                 const holidays = await this.calendarManager.fetchHolidays(year);
                 const allData = this.scheduleManager.getAllData();
-                const { userVacations = {}, adminHolidays = [], userAvailability = {}, outsideSchedule = {}, manualAssignments = {}, userVacationTimes = {} } = allData; 
+                const { userVacations = {}, adminHolidays = [], userAvailability = {}, outsideSchedule = {}, manualAssignments = {}, userVacationTimes = {} } = allData;
 
                 const dailySchedule = {};
                 const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
@@ -3270,7 +3802,7 @@
                 // --- Render Auto-Generated Outside Schedule ---
                 Object.keys(outsideSchedule).forEach(dateString => {
                     const assignments = outsideSchedule[dateString] || [];
-                     const assignmentsArray = Array.isArray(assignments) ? assignments : Object.values(assignments);
+                    const assignmentsArray = Array.isArray(assignments) ? assignments : Object.values(assignments);
                     if (dailySchedule[dateString] && assignmentsArray.length > 0) {
                         assignmentsArray.forEach(assignment => {
                             dailySchedule[dateString].push({
@@ -3282,31 +3814,31 @@
                         });
                     }
                 });
-                
+
                 // --- Render Manual Assignments (for Outside) ---
-                 Object.keys(manualAssignments).forEach(dateString => {
+                Object.keys(manualAssignments).forEach(dateString => {
                     const assignments = manualAssignments[dateString] || [];
                     const assignmentsArray = Array.isArray(assignments) ? assignments : Object.values(assignments);
 
                     if (dailySchedule[dateString] && assignmentsArray.length > 0) {
-                         assignmentsArray.forEach(assignment => {
+                        assignmentsArray.forEach(assignment => {
                             // Check if this shift belongs to the outside view
                             const assignedShift = assignment.assignedShift;
-                            
+
                             // 外場月曆：只顯示外場的收班，不顯示內場的收班
                             if (assignedShift === '收班（內場）') {
                                 return; // 跳過內場的收班
                             }
-                            
+
                             if (this.outsideShifts.includes(assignedShift)) {
                                 let role = "外場工讀生"; // Default
                                 if (assignedShift === "櫃檯") {
                                     role = "外場櫃檯";
                                 }
-                                
-                                dailySchedule[dateString].push({ 
-                                    username: assignment.username, 
-                                    role: role, 
+
+                                dailySchedule[dateString].push({
+                                    username: assignment.username,
+                                    role: role,
                                     shift: assignedShift, // Use the assigned shift directly
                                     isManual: true // Mark as manual
                                 });
@@ -3319,20 +3851,20 @@
                 // 添加櫃檯人員的正常上班（非休假日期）
                 const allUsers = this.scheduleManager.getAllUsers();
                 const counterStaff = allUsers.filter(u => u.role === "外場櫃檯");
-                
+
                 counterStaff.forEach(staff => {
                     const vacationKey = `${staff.id}-${year}-${month + 1}`;
                     const monthlyVacations = userVacations[vacationKey] || [];
-                    
+
                     for (let i = 1; i <= lastDayOfMonth; i++) {
                         const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
                         const date = new Date(year, month, i);
                         const dayOfWeek = date.getDay();
-                        
+
                         // Skip Thursday, vacation days, AND if already manually assigned as "櫃檯"
                         const isManuallyAssignedCounter = dailySchedule[dateString]?.some(s => s.isManual && s.role === "外場櫃檯" && s.username === staff.username);
                         if (dayOfWeek === 4 || monthlyVacations.includes(dateString) || isManuallyAssignedCounter) continue;
-                        
+
                         // Check if ANY counter is scheduled (auto or manual)
                         const hasCounter = dailySchedule[dateString]?.some(s => s.role === "外場櫃檯" || s.shift === "櫃檯");
                         if (!hasCounter) {
@@ -3347,13 +3879,13 @@
                 });
 
                 const calendarGrid = document.getElementById('calendar-grid');
-                
+
                 // === 優化 1.5: 使用 DocumentFragment 批量 DOM 操作 (外場月曆) ===
                 const fragment = document.createDocumentFragment();
-                
+
                 const firstDayIndex = this.calendarManager.getCalendarDate().getDay();
                 const prevLastDay = new Date(year, month, 0).getDate();
-                
+
                 // 添加上個月的日期佔位
                 for (let i = firstDayIndex; i > 0; i--) {
                     const emptyDay = document.createElement('div');
@@ -3364,7 +3896,7 @@
 
                 const todayString = new Date().toISOString().split('T')[0];
                 const currentUserData = this.authManager.getCurrentUserData();
-                
+
                 // === 優化: 預先計算 adminHolidays Set 加速查找 ===
                 const adminHolidaysSet = new Set(adminHolidays);
 
@@ -3399,7 +3931,7 @@
                                 break;
                             }
                         }
-                        
+
                         let isShortage = false;
                         if (isCounterVacation) {
                             // 櫃檯休假: 平日應有 4 班、假日應有 5 班
@@ -3412,10 +3944,10 @@
                             }
                         } else {
                             // 櫃檯未休假
-                            if (dayOfWeek === 0 || dayOfWeek === 6) { 
+                            if (dayOfWeek === 0 || dayOfWeek === 6) {
                                 // 週末: 應有 4 班 (櫃檯, 早班, 收班, 洗碗)
                                 if (numShifts < 4) { isShortage = true; }
-                            } else { 
+                            } else {
                                 // 平日: 應有 3 班 (櫃檯, 收班, 洗碗)
                                 if (numShifts < 3) { isShortage = true; }
                             }
@@ -3426,14 +3958,14 @@
                         } else if (holidayName) {
                             day.classList.add('bg-yellow-100');
                         }
-                        
+
                         if (this.OUTSIDE_ROLES.includes(currentUserData.role) || currentUserData.role === this.ADMIN_ROLE) {
                             day.classList.add('cursor-pointer');
                         }
 
                         let usersHtml = '<div class="flex-grow"></div>';
                         if (workingUsers.length > 0) {
-                            
+
                             // Sort Order for Outside View
                             const getSortOrder = (workInfo) => {
                                 const { role, shift } = workInfo;
@@ -3449,14 +3981,14 @@
                                 return 99; // Other/Unknown
                             };
                             workingUsers.sort((a, b) => getSortOrder(a) - getSortOrder(b));
-                            
+
                             const userListHtml = workingUsers.map(workInfo => {
                                 const { username, role, shift, isManual } = workInfo;
                                 let displayLabel = '';
                                 let colorClass = '';
-                                
+
                                 // Determine label and color based on shift
-                                switch(shift) {
+                                switch (shift) {
                                     case "櫃檯":
                                         displayLabel = '(櫃)';
                                         colorClass = 'font-semibold text-purple-800';
@@ -3465,7 +3997,7 @@
                                         displayLabel = '(早櫃)';
                                         colorClass = 'font-semibold text-purple-600';
                                         break;
-                                     case "晚櫃":
+                                    case "晚櫃":
                                         displayLabel = '(晚櫃)';
                                         colorClass = 'font-semibold text-purple-600';
                                         break;
@@ -3498,18 +4030,18 @@
                             }).join('');
                             usersHtml = `<div class="mt-1 text-gray-600 leading-tight overflow-hidden">${userListHtml}</div>`;
                         }
-                        
+
                         let selfStatusHtml = '';
-                         if (currentUserData.role === this.ADMIN_ROLE) {
-                             if(!holidayName && !isShortage) day.classList.add('bg-gray-50');
-                         } else if (currentUserData.role === "外場櫃檯") {
-                            const vacationKey = `${currentUserData.uid}-${year}-${month+1}`;
+                        if (currentUserData.role === this.ADMIN_ROLE) {
+                            if (!holidayName && !isShortage) day.classList.add('bg-gray-50');
+                        } else if (currentUserData.role === "外場櫃檯") {
+                            const vacationKey = `${currentUserData.uid}-${year}-${month + 1}`;
                             const isVacation = (userVacations[vacationKey] || []).includes(dateString);
                             if (isVacation) {
                                 day.classList.add('bg-red-100', 'border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">休假</p>`;
                             } else {
-                                if(!holidayName && !isShortage) day.classList.add('bg-green-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-green-100');
                                 day.classList.add('border', 'border-green-400');
                                 selfStatusHtml = `<p class="font-semibold text-green-700">上班日</p>`;
                             }
@@ -3519,67 +4051,67 @@
                             const vacationTimeKey = `${currentUserData.uid}-${year}-${monthNumber}`;
                             const legacyVacationTimeKey = `${currentUserData.uid}-${year}-${String(monthNumber).padStart(2, '0')}`;
                             const isUnavailable = (userAvailability[availabilityKey] || []).includes(dateString);
-                            const vacationData = userVacationTimes[vacationTimeKey]?.[dateString] 
+                            const vacationData = userVacationTimes[vacationTimeKey]?.[dateString]
                                 || userVacationTimes[legacyVacationTimeKey]?.[dateString];
                             const isWorking = workingUsers.some(w => w.username === currentUserData.username);
 
                             if (isWorking) { // Check if working first
-                                if(!holidayName && !isShortage) day.classList.add('bg-blue-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-blue-100');
                                 day.classList.add('border', 'border-blue-400');
                                 selfStatusHtml = `<p class="font-semibold text-blue-700">上班</p>`;
                             } else if (isUnavailable) { // Then check if unavailable (old system)
-                                if(!holidayName && !isShortage) day.classList.add('bg-red-100');
+                                if (!holidayName && !isShortage) day.classList.add('bg-red-100');
                                 day.classList.add('border', 'border-red-400');
                                 selfStatusHtml = `<p class="font-semibold text-red-700">不上班</p>`;
                             } else if (vacationData) { // Check new vacation time system
                                 if (vacationData.morning && vacationData.evening) {
                                     // 全天休假
-                                    if(!holidayName && !isShortage) day.classList.add('bg-red-100');
+                                    if (!holidayName && !isShortage) day.classList.add('bg-red-100');
                                     day.classList.add('border', 'border-red-400');
                                     selfStatusHtml = `<p class="font-semibold text-red-700">全天休假</p>`;
                                 } else if (vacationData.morning) {
                                     // 早上休假
-                                    if(!holidayName && !isShortage) day.classList.add('bg-orange-100');
+                                    if (!holidayName && !isShortage) day.classList.add('bg-orange-100');
                                     day.classList.add('border', 'border-orange-400');
                                     selfStatusHtml = `<p class="font-semibold text-orange-700">早上休假</p>`;
                                 } else if (vacationData.evening) {
                                     // 晚上休假
-                                    if(!holidayName && !isShortage) day.classList.add('bg-yellow-100');
+                                    if (!holidayName && !isShortage) day.classList.add('bg-yellow-100');
                                     day.classList.add('border', 'border-yellow-400');
                                     selfStatusHtml = `<p class="font-semibold text-yellow-700">晚上休假</p>`;
                                 } else {
                                     // 可以工作
-                                    if(!holidayName && !isShortage) day.classList.add('bg-white');
+                                    if (!holidayName && !isShortage) day.classList.add('bg-white');
                                     selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
                                 }
                             } else { // Otherwise, available but not scheduled
-                                if(!holidayName && !isShortage) day.classList.add('bg-white');
+                                if (!holidayName && !isShortage) day.classList.add('bg-white');
                                 selfStatusHtml = `<p class="text-gray-400">待排班</p>`;
                             }
                         }
 
                         day.innerHTML = `<div class="text-center"><span class="font-bold text-gray-800 text-xs sm:text-sm">${i}</span>${holidayName ? `<p class="text-[9px] sm:text-[11px] font-bold text-yellow-800">${holidayName}</p>` : ''}${selfStatusHtml}</div>${usersHtml}`;
                     }
-                    
+
                     if (dateString === todayString) day.classList.add('today');
                     fragment.appendChild(day); // 添加到 fragment 而非直接操作 DOM
                 }
-                
+
                 // === 優化 1.5: 一次性更新 DOM ===
                 calendarGrid.innerHTML = '';
                 calendarGrid.appendChild(fragment);
                 perfMonitor.end('renderOutsideCalendar');
             }
-            
+
             // 事件監聽器 (優化版)
             setupEventListeners() {
-                this.uiManager.showRegisterBtn.addEventListener('click', (e) => { 
-                    e.preventDefault(); this.uiManager.showRegisterForm(); 
+                this.uiManager.showRegisterBtn.addEventListener('click', (e) => {
+                    e.preventDefault(); this.uiManager.showRegisterForm();
                 });
-                this.uiManager.showLoginBtn.addEventListener('click', (e) => { 
-                    e.preventDefault(); this.uiManager.showLoginForm(); 
+                this.uiManager.showLoginBtn.addEventListener('click', (e) => {
+                    e.preventDefault(); this.uiManager.showLoginForm();
                 });
-                
+
                 this.uiManager.registerForm.addEventListener('submit', (e) => this.handleRegister(e));
                 this.uiManager.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
                 this.uiManager.logoutBtn.addEventListener('click', () => this.handleLogout());
@@ -3588,7 +4120,7 @@
                 this.uiManager.settingsBtn.addEventListener('click', () => {
                     this.uiManager.showSettingsModal();
                     const newUsernameInput = document.getElementById('new-username');
-                    if(newUsernameInput && this.authManager.getCurrentUserData()) {
+                    if (newUsernameInput && this.authManager.getCurrentUserData()) {
                         newUsernameInput.value = this.authManager.getCurrentUserData().username;
                     }
                 });
@@ -3604,21 +4136,31 @@
                         this.handleShiftSelect(button.dataset.date, button.dataset.shift);
                     }
                 });
-                
+
                 // Cover Shift (Replacement) Modal Listeners
                 this.uiManager.closeCoverShiftBtn.addEventListener('click', () => this.uiManager.hideCoverShiftModal());
                 this.uiManager.coverShiftForm.addEventListener('submit', (e) => this.handleAssignCoverShift(e));
-                
+
                 // Vacation Time Modal Listeners
                 this.uiManager.closeVacationTimeBtn.addEventListener('click', () => this.uiManager.hideVacationTimeModal());
                 this.uiManager.cancelVacationTimeBtn.addEventListener('click', () => this.uiManager.hideVacationTimeModal());
                 this.uiManager.confirmVacationTimeBtn.addEventListener('click', () => this.handleVacationTimeConfirm());
-                
+
                 // Delete User Modal Listeners
                 this.uiManager.closeDeleteUserBtn.addEventListener('click', () => this.uiManager.hideDeleteUserModal());
                 this.uiManager.cancelDeleteUserBtn.addEventListener('click', () => this.uiManager.hideDeleteUserModal());
                 this.uiManager.confirmDeleteUserBtn.addEventListener('click', () => this.handleDeleteUser());
-                
+
+                // Admin Action Modal Listeners
+                this.uiManager.closeAdminActionBtn.addEventListener('click', () => this.uiManager.hideAdminActionModal());
+                this.uiManager.adminSetHolidayBtn.addEventListener('click', () => this.handleAdminSetHoliday());
+                this.uiManager.adminSwapStaffBtn.addEventListener('click', () => this.handleAdminSwapStaffClick());
+
+                // Admin Swap Modal Listeners
+                this.uiManager.closeAdminSwapBtn.addEventListener('click', () => this.uiManager.hideAdminSwapModal());
+                this.uiManager.cancelAdminSwapBtn.addEventListener('click', () => this.uiManager.hideAdminSwapModal());
+                this.uiManager.confirmAdminSwapBtn.addEventListener('click', () => this.confirmAdminSwap());
+
                 // Calendar View Event Delegation
                 this.uiManager.calendarView.addEventListener('click', async (e) => {
                     // --- Button specific actions first ---
@@ -3641,14 +4183,14 @@
                     if (e.target.closest('#prev-month-btn')) {
                         this.calendarManager.previousMonth();
                         if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
-                             this.currentCalendarView === 'inside' ? this.renderFullCalendar() : this.renderOutsideCalendar();
+                            this.currentCalendarView === 'inside' ? this.renderFullCalendar() : this.renderOutsideCalendar();
                         } else { this.renderAppView(); }
                         return;
                     }
                     if (e.target.closest('#next-month-btn')) {
                         this.calendarManager.nextMonth();
-                         if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
-                             this.currentCalendarView === 'inside' ? this.renderFullCalendar() : this.renderOutsideCalendar();
+                        if (this.authManager.getCurrentUserData().role === this.ADMIN_ROLE) {
+                            this.currentCalendarView === 'inside' ? this.renderFullCalendar() : this.renderOutsideCalendar();
                         } else { this.renderAppView(); }
                         return;
                     }
@@ -3658,11 +4200,11 @@
                         return;
                     }
                 });
-                
+
                 // Manual Assignment Form Submission
                 this.uiManager.calendarView.addEventListener('submit', async (e) => {
                     if (e.target.id === 'manual-assignment-form') {
-                       await this.handleManualAssignment(e);
+                        await this.handleManualAssignment(e);
                     }
                 });
             }
@@ -3672,31 +4214,33 @@
                 onAuthStateChanged(this.auth, async (user) => {
                     this.scheduleManager.cleanupListeners(); // Clean up listeners on auth state change
                     this.clearCalendarCache(); // 清除快取
-                    
+
                     if (user) {
                         this.authManager.setCurrentUser(user);
                         const userData = await this.authManager.getUserData(user);
-                        
+
                         if (userData) {
                             this.authManager.setCurrentUserData(userData);
                             this.uiManager.updateUserInfo(userData.username, userData.role);
-                            
+
                             this.uiManager.showAppView();
-                            
+
                             // === 優化 4.3: 使用防抖的資料變更回調 ===
                             // 防止短時間內多次資料變更導致重複渲染
                             const debouncedRender = debounce(() => {
                                 // Prevent re-render if modals are open
-                                if(!this.uiManager.settingsModal.classList.contains('hidden')) return;
-                                if(!this.uiManager.shiftSelectModal.classList.contains('hidden')) return;
-                                if(!this.uiManager.coverShiftModal.classList.contains('hidden')) return;
-                                if(!this.uiManager.vacationTimeModal.classList.contains('hidden')) return;
-                                if(!this.uiManager.deleteUserModal.classList.contains('hidden')) return;
-                                
+                                if (!this.uiManager.settingsModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.shiftSelectModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.coverShiftModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.vacationTimeModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.deleteUserModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.adminActionModal.classList.contains('hidden')) return;
+                                if (!this.uiManager.adminSwapModal.classList.contains('hidden')) return;
+
                                 // 檢查資料是否真的有變更
                                 const allData = this.scheduleManager.getAllData();
                                 const newHash = this.calculateDataHash(allData);
-                                
+
                                 if (this.calendarCache.dataHash !== newHash) {
                                     this.calendarCache.dataHash = newHash;
                                     this.clearCalendarCache(); // 資料變更時清除快取
@@ -3704,9 +4248,9 @@
                                     console.log('📅 月曆已更新 (資料變更)');
                                 }
                             }, 150); // 150ms 防抖延遲
-                            
+
                             this.scheduleManager.setOnDataChangeCallback(debouncedRender);
-                            
+
                             this.scheduleManager.setupRealtimeListeners();
                             // Initial render after setup
                             this.renderAppView();
@@ -3738,13 +4282,14 @@
                     }, 300);
                 }
             };
-            
+
             // 延遲一小段時間確保 Firebase 初始化完成
             setTimeout(hideLoadingScreen, 500);
-            
+
             new ScheduleApp();
         });
 
     </script>
 </body>
+
 </html>
